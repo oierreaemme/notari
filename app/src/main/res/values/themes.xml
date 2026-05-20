@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      The launcher / splash theme is XML because Android requires it for the cold-start
+      window background. The full app theme is Compose-based and lives in :core:design.
+    -->
+    <style name="Theme.VoiceNoteMarkdown.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">?attr/colorSurface</item>
+        <item name="postSplashScreenTheme">@style/Theme.VoiceNoteMarkdown</item>
+    </style>
+
+    <style name="Theme.VoiceNoteMarkdown" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor" tools:targetApi="21">@android:color/transparent</item>
+        <item name="android:navigationBarColor" tools:targetApi="21">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="23">true</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+    </style>
+
+</resources>

@@ -1,0 +1,9 @@
+{
+  "language": "fr",
+  "title": "Rendez-vous chez le médecin",
+  "tags": ["santé", "médecin"],
+  "mentions": [
+    { "surface_form": "la semaine prochaine", "iso_resolved": null }
+  ],
+  "body_markdown": "- Prendre rendez-vous chez le médecin la semaine prochaine\n- Demander une ordonnance pour les analyses de sang\n- Vérifier le résultat de la radio"
+}

@@ -1,0 +1,1 @@
+Idee fürs Projekt: vielleicht sollten wir eine Tastenkombination einbauen, mit der man die Aufnahme direkt von der Sperrbildschirm-Schnellaktion starten kann. Das würde die Friktion massiv senken.

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      PRIVACY PILLAR — DO NOT ADD <uses-permission android:name="android.permission.INTERNET" />
+      A CI check fails the build if INTERNET appears in the merged manifest. See
+      docs/decisions/0002-privacy-enforcement.md and 0007-strip-transitive-network-perms.md
+      for the rationale and the enforcement script.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!--
+      Some transitive dependencies (notably com.google.mediapipe:tasks-genai pulling
+      Google datatransport) silently merge INTERNET / ACCESS_NETWORK_STATE into the final
+      manifest. We rip them back out with tools:node="remove" so the merged manifest
+      surfaces zero network permissions. The CI gate enforces that this stays true.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" tools:node="remove" />
+
+    <application
+        android:name=".VoiceNoteMarkdownApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.VoiceNoteMarkdown.Splash"
+        tools:targetApi="33">
+
+        <!--
+          Google datatransport ships with MediaPipe and would otherwise schedule
+          background jobs that talk to Google servers. Rip every entry out at merge time.
+          After the LiteRT-LM migration (ADR 0008) MediaPipe is no longer a direct
+          dependency, but the scrubbing is kept as defense in depth — see ADR 0007.
+          `tools:ignore="MissingClass"` silences the Lint MissingClass error: we know
+          the class is not on the classpath, that's the entire point of this stripping.
+        -->
+        <service
+            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+            tools:node="remove"
+            tools:ignore="MissingClass" />
+        <service
+            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+            tools:node="remove"
+            tools:ignore="MissingClass" />
+        <receiver
+            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+            tools:node="remove"
+            tools:ignore="MissingClass" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.VoiceNoteMarkdown.Splash"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>

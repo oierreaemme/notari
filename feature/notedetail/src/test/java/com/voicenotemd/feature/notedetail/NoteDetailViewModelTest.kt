@@ -1,0 +1,208 @@
+// A few lines in the inline anonymous-object NoteRepository stub exceed 120 chars after
+// ktlint's `function-signature-expression-body` rule joins single-expression overrides
+// onto the signature line. The expressions are short and self-explanatory; rewriting
+// them to fit (extracted helpers, multi-line bodies, etc.) would add ceremony without
+// improving the test. Suppress max-line-length for this file.
+@file:Suppress("ktlint:standard:max-line-length")
+
+package com.voicenotemd.feature.notedetail
+
+import androidx.lifecycle.SavedStateHandle
+import app.cash.turbine.test
+import com.google.common.truth.Truth.assertThat
+import com.voicenotemd.core.common.domain.Language
+import com.voicenotemd.core.common.domain.Note
+import com.voicenotemd.core.common.domain.Tag
+import com.voicenotemd.core.common.repository.NoteRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class NoteDetailViewModelTest {
+    private val testDispatcher = UnconfinedTestDispatcher()
+    private val notesFlow = MutableStateFlow<Map<String, Note>>(emptyMap())
+    private val deleted = mutableListOf<String>()
+    private val updates = mutableListOf<Note>()
+
+    private lateinit var repository: NoteRepository
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(testDispatcher)
+        repository =
+            object : NoteRepository {
+                override fun observeAll(): Flow<List<Note>> = notesFlow.map { it.values.toList() }
+
+                override fun observe(id: String): Flow<Note?> = notesFlow.map { it[id] }
+
+                override fun observeByTag(tag: Tag): Flow<List<Note>> =
+                    notesFlow.map { it.values.filter { n -> n.tags.contains(tag) } }
+
+                override fun observeAllTags(): Flow<List<Tag>> =
+                    notesFlow.map { it.values.flatMap(Note::tags).distinct() }
+
+                override suspend fun insert(note: Note) {
+                    notesFlow.value = notesFlow.value + (note.id to note)
+                }
+
+                override suspend fun update(note: Note) {
+                    updates += note
+                    insert(note)
+                }
+
+                override suspend fun delete(id: String) {
+                    deleted += id
+                    notesFlow.value = notesFlow.value - id
+                }
+
+                override suspend fun deleteAll() {
+                    notesFlow.value = emptyMap()
+                }
+            }
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `should expose note from repository when present`() =
+        runTest {
+            seed("abc")
+
+            val vm = newViewModel("abc")
+
+            advanceTimeBy(50)
+            val state = vm.uiState.value
+            assertThat(state.isLoading).isFalse()
+            assertThat(state.note?.id).isEqualTo("abc")
+        }
+
+    @Test
+    fun `should set notFound when repository emits null`() =
+        runTest {
+            val vm = newViewModel("missing")
+
+            advanceTimeBy(50)
+            assertThat(vm.uiState.value.notFound).isTrue()
+        }
+
+    @Test
+    fun `should enter edit and save updated note`() =
+        runTest {
+            seed("abc")
+            val vm = newViewModel("abc")
+            advanceTimeBy(50)
+
+            vm.onIntent(NoteDetailUiIntent.EnterEdit)
+            vm.onIntent(NoteDetailUiIntent.UpdateDraftTitle("New title"))
+            vm.onIntent(NoteDetailUiIntent.UpdateDraftBody("Body changed"))
+            vm.onIntent(NoteDetailUiIntent.SaveEdit)
+
+            advanceTimeBy(50)
+            val saved = updates.last()
+            assertThat(saved.title).isEqualTo("New title")
+            assertThat(saved.bodyMarkdown).isEqualTo("Body changed")
+            assertThat(vm.uiState.value.isEditing).isFalse()
+        }
+
+    @Test
+    fun `should restore drafts when CancelEdit fires`() =
+        runTest {
+            seed("abc")
+            val vm = newViewModel("abc")
+            advanceTimeBy(50)
+            vm.onIntent(NoteDetailUiIntent.EnterEdit)
+            vm.onIntent(NoteDetailUiIntent.UpdateDraftTitle("temp"))
+            vm.onIntent(NoteDetailUiIntent.CancelEdit)
+
+            val state = vm.uiState.value
+            assertThat(state.isEditing).isFalse()
+            assertThat(state.draftTitle).isEqualTo(state.note?.title)
+        }
+
+    @Test
+    fun `should emit Closed event after Delete`() =
+        runTest {
+            seed("abc")
+            val vm = newViewModel("abc")
+            advanceTimeBy(50)
+
+            vm.uiEvents.test {
+                vm.onIntent(NoteDetailUiIntent.Delete)
+                assertThat(awaitItem()).isEqualTo(NoteDetailUiEvent.Closed)
+                cancelAndConsumeRemainingEvents()
+            }
+            assertThat(deleted).containsExactly("abc")
+        }
+
+    @Test
+    fun `should emit ShareMarkdown with YAML frontmatter and body`() =
+        runTest {
+            val tag = Tag.normalize("focus")!!
+            seed(id = "abc", title = "Hello", body = "Body text", tags = listOf(tag))
+            val vm = newViewModel("abc")
+            advanceTimeBy(50)
+
+            vm.uiEvents.test {
+                vm.onIntent(NoteDetailUiIntent.Share)
+                val event = awaitItem() as NoteDetailUiEvent.ShareMarkdown
+                assertThat(event.title).isEqualTo("Hello")
+                // Share output now matches the ZIP export format — YAML frontmatter
+                // followed by `# Title` heading and the body. See
+                // `Note.toMarkdownWithFrontmatter` in :core:common.
+                assertThat(event.markdown).startsWith("---\n")
+                assertThat(event.markdown).contains("title: \"Hello\"")
+                assertThat(event.markdown).contains("language: en")
+                assertThat(event.markdown).contains("tags: [focus]")
+                assertThat(event.markdown).contains("---\n\n# Hello")
+                assertThat(event.markdown).contains("Body text")
+                cancelAndConsumeRemainingEvents()
+            }
+        }
+
+    private fun seed(
+        id: String,
+        title: String = "Some title",
+        body: String = "Some body",
+        tags: List<Tag> = emptyList(),
+    ) {
+        notesFlow.value = notesFlow.value + (
+            id to
+                Note(
+                    id = id,
+                    title = title,
+                    bodyMarkdown = body,
+                    tags = tags,
+                    mentions = emptyList(),
+                    language = Language.English,
+                    createdAt = Instant.parse("2026-05-09T12:00:00Z"),
+                    updatedAt = Instant.parse("2026-05-09T12:00:00Z"),
+                    structured = true,
+                )
+        )
+    }
+
+    private fun newViewModel(id: String): NoteDetailViewModel =
+        NoteDetailViewModel(
+            noteRepository = repository,
+            savedStateHandle = SavedStateHandle(mapOf(NoteDetailViewModel.NOTE_ID_KEY to id)),
+        ).apply {
+            clock = Clock.fixed(Instant.parse("2026-05-09T12:00:00Z"), ZoneOffset.UTC)
+        }
+}

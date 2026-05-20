@@ -1,0 +1,9 @@
+{
+  "language": "it",
+  "title": "Spesa al mercato",
+  "tags": ["spesa", "mercato"],
+  "mentions": [
+    { "surface_form": "domani", "iso_resolved": null }
+  ],
+  "body_markdown": "Domani al mercato:\n- zucchine\n- due pomodori\n- un mazzo di basilico\n- pane integrale\n- fichi (se ci sono)"
+}

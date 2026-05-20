@@ -1,0 +1,9 @@
+{
+  "language": "pt",
+  "title": "Reunião com o cliente sexta às 16:00",
+  "tags": ["reuniao", "cliente", "proposta"],
+  "mentions": [
+    { "surface_form": "sexta às quatro da tarde", "iso_resolved": null }
+  ],
+  "body_markdown": "Reunião com o cliente sexta às 16:00 para revisar a proposta.\n\n- Levar a apresentação atualizada\n- Levar o cronograma do segundo trimestre"
+}

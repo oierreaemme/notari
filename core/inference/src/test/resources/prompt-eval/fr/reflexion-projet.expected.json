@@ -1,0 +1,7 @@
+{
+  "language": "fr",
+  "title": "Découper la fonctionnalité d'export",
+  "tags": ["projet", "produit", "export"],
+  "mentions": [],
+  "body_markdown": "Découper la fonctionnalité d'export en deux livraisons :\n\n1. Markdown uniquement\n2. Pièces jointes"
+}

@@ -1,0 +1,10 @@
+{
+  "language": "it",
+  "title": "Riunione team spostata a giovedì",
+  "tags": ["riunione", "team", "metriche"],
+  "mentions": [
+    { "surface_form": "giovedì alle dieci e trenta", "iso_resolved": null },
+    { "surface_form": "mercoledì sera", "iso_resolved": null }
+  ],
+  "body_markdown": "Riunione del team spostata a giovedì 10:30.\n\n- Preparare il riepilogo delle metriche del trimestre\n- Mandarlo a Luca entro mercoledì sera"
+}

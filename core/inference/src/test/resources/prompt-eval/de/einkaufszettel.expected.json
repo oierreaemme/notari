@@ -1,0 +1,9 @@
+{
+  "language": "de",
+  "title": "Einkauf morgen früh",
+  "tags": ["einkauf", "baecker"],
+  "mentions": [
+    { "surface_form": "morgen früh", "iso_resolved": null }
+  ],
+  "body_markdown": "Morgen früh:\n\n**Bäcker**\n- 2 Brötchen\n- 1 Sauerteigbrot\n\n**Supermarkt**\n- Milch\n- Butter"
+}

@@ -1,0 +1,1 @@
+Réflexion sur le projet: je pense qu'on devrait découper la fonctionnalité d'export en deux livraisons. Première livraison juste le markdown, deuxième les pièces jointes.

@@ -1,0 +1,67 @@
+# Built files
+*.apk
+*.aab
+*.dex
+*.class
+bin/
+gen/
+out/
+release/
+
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystores — never commit
+*.jks
+*.keystore
+keystore.properties
+
+# OS / editors
+.DS_Store
+Thumbs.db
+*~
+*.swp
+
+# Logs
+*.log
+
+# Coverage
+/jacoco/
+**/build/reports/
+
+# Models — too large for git, downloaded separately or bundled at build time
+*.task
+*.litertlm
+*.tflite
+*.bin
+/models/
+/core/inference/src/main/assets/models/
+
+# Media — demo recordings, rehearsals, raw screen captures. Final demo lives
+# on YouTube and is linked, never committed. Curated screenshots/GIFs for the
+# README go under docs/screenshots/ and are added explicitly.
+*.mp4
+*.mov
+*.mkv
+*.webm
+rehearsal*
+
+# Generated screenshots and test outputs (committed selectively under docs/screenshots)
+**/build/outputs/roborazzi/
+
+# Secrets — there are no secrets in this project, but defense in depth
+.env
+.env.*
+secrets.properties

@@ -1,0 +1,9 @@
+{
+  "language": "es",
+  "title": "Cita con el dentista el martes",
+  "tags": ["dentista", "cita", "salud"],
+  "mentions": [
+    { "surface_form": "martes a las cinco de la tarde", "iso_resolved": null }
+  ],
+  "body_markdown": "Cita con el dentista el martes a las 17:00.\n\n- Llevar la tarjeta del seguro\n- Preguntar por el presupuesto de la limpieza"
+}

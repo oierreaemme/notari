@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      RECORD_AUDIO is also declared in the :app manifest so it is requested at runtime
+      from the capture screen. Declaring it here keeps the dependency explicit for the ASR
+      module that actually uses it.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+</manifest>

@@ -1,0 +1,108 @@
+# Detekt configuration. The defaults are mostly sane; this file overrides
+# only what we need to. We aim for *strict* settings on the domain and data
+# layers, more relaxed on UI (since UI evolves fastest).
+
+build:
+  maxIssues: 0
+  excludeCorrectable: false
+
+complexity:
+  active: true
+  CyclomaticComplexMethod:
+    threshold: 15
+  LongMethod:
+    threshold: 80
+  LongParameterList:
+    functionThreshold: 7
+    constructorThreshold: 9 # ViewModels with many use cases need this room
+  TooManyFunctions:
+    thresholdInClasses: 25
+    thresholdInInterfaces: 12
+    thresholdInObjects: 12
+    thresholdInEnums: 12
+    thresholdInFiles: 30
+
+empty-blocks:
+  active: true
+  EmptyFunctionBlock:
+    active: true
+    ignoreOverridden: true
+
+exceptions:
+  TooGenericExceptionCaught:
+    excludes:
+      - '**/inference/**'  # MediaPipe surfaces broad checked exceptions
+  SwallowedException:
+    active: true
+  ThrowingExceptionFromFinally:
+    active: true
+
+# Note: the `formatting` ruleset lives in the `detekt-formatting` plugin, which
+# is a separate dependency we do not currently put on the classpath. Formatting
+# is enforced by ktlint (a sibling task in CI) instead, so we get the same
+# coverage without the extra plugin and without two competing autoformatters.
+# If we later add `detekt-formatting`, restore the `formatting:` block here.
+
+naming:
+  active: true
+  ConstructorParameterNaming:
+    active: true
+  FunctionNaming:
+    functionPattern: '[a-z][a-zA-Z0-9]*|`[^`]+`'
+  TopLevelPropertyNaming:
+    constantPattern: '[A-Z][_A-Z0-9]*'
+
+style:
+  active: true
+  MagicNumber:
+    excludes:
+      - '**/test/**'
+      - '**/build-logic/**'
+  ReturnCount:
+    max: 4
+  ForbiddenComment:
+    active: true
+    # Detekt 1.23+ renamed `values` to `comments` and switched to a structured
+    # form with explicit `reason` per entry. The old single-string form is no
+    # longer accepted by the YAML validator (it now errors with "property
+    # 'values' does not exist"). Keep the rationale visible per entry — a
+    # surviving TODO without a reason in the diff is a code-review failure.
+    comments:
+      - reason: 'TODO left in code — convert to issue tracker or remove.'
+        value: 'TODO:'
+      - reason: 'FIXME left in code — fix or convert to issue tracker.'
+        value: 'FIXME:'
+    excludes:
+      - '**/test/**'
+  WildcardImport:
+    active: true
+  # CRITICAL: forbid the imports that would let us break the privacy pillars.
+  # See docs/decisions/0002-privacy-enforcement.md.
+  ForbiddenImport:
+    active: true
+    imports:
+      # ---- Pillar 1: zero network ----
+      - value: 'java.net.HttpURLConnection'
+        reason: 'No network access — see ADR 0002'
+      - value: 'java.net.URLConnection'
+        reason: 'No network access — see ADR 0002'
+      - value: 'okhttp3.*'
+        reason: 'No network access — see ADR 0002'
+      - value: 'retrofit2.*'
+        reason: 'No network access — see ADR 0002'
+      - value: 'com.google.firebase.*'
+        reason: 'No analytics, no crash reporting that phones home — see ADR 0002'
+      # ---- Pillar 2: zero audio persistence ----
+      # Anywhere except the plain-text Markdown export path. Audio is RAM-only.
+      - value: 'android.media.MediaRecorder'
+        reason: 'Audio is held only in RAM — see ADR 0002 / pillar 2'
+      - value: 'android.media.MediaMuxer'
+        reason: 'Audio is held only in RAM — see ADR 0002 / pillar 2'
+      - value: 'android.media.MediaCodec'
+        reason: 'Audio is held only in RAM — see ADR 0002 / pillar 2'
+
+# The legacy `custom:` block was removed (detekt 1.23+ rejects unknown top-level
+# keys at validation time, even when the block is inactive). Custom rules, if we
+# ever need them, go in a dedicated module on the detekt classpath rather than
+# inline here. The canonical privacy-enforcement rule is `style.ForbiddenImport`
+# above.
