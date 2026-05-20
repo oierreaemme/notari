@@ -308,7 +308,7 @@ leaves your phone."*
 
 ## Try it
 
-- **Code** — `github.com/<USER>/notari` *(repo made public on submission day)*
+- **Code** — `github.com/oierreaemme/notari` *(repo made public on submission day)*
 - **APK** — direct download on the GitHub Releases page; SHA-256 published
   alongside so you can verify the file you installed is the one the source
   produced.

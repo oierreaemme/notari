@@ -114,7 +114,7 @@
   in two languages — a real, lived-in gallery.
 - **FRAME:** Closing card: **"Notari"** + tagline *"Speak. Get a clean
   Markdown note. The audio never leaves your phone."* Then the links:
-  *"Open source — github.com/<user>/notari"* and *"Built with Gemma 4
+  *"Open source — github.com/oierreaemme/notari"* and *"Built with Gemma 4
   E2B · on-device · Apache 2.0."*
 - **AUDIO:** optional closing voiceover: *"Notari. Open source, on-device,
   and yours."*

@@ -13,7 +13,7 @@
 
 ## Try it
 
-- **Code** — [github.com/<USER>/notari](https://github.com/<USER>/notari)
+- **Code** — [github.com/oierreaemme/notari](https://github.com/oierreaemme/notari)
   *(replace placeholder before publishing; repo to be made public the
   day of submission)*
 - **APK** — direct download on the GitHub Releases page above; SHA-256

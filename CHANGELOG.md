@@ -666,4 +666,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No audio files written to disk at any point.
 - No analytics, no crash reporting, no telemetry.
 
-[Unreleased]: https://github.com/REPLACE_ME/voice-note-markdown/compare/HEAD
+[Unreleased]: https://github.com/oierreaemme/notari/compare/HEAD

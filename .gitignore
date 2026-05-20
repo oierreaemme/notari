@@ -61,6 +61,9 @@ rehearsal*
 # Generated screenshots and test outputs (committed selectively under docs/screenshots)
 **/build/outputs/roborazzi/
 
+# Agent operating-contract / working notes — kept local, not published.
+GEMINI.md
+
 # Secrets — there are no secrets in this project, but defense in depth
 .env
 .env.*

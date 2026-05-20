@@ -152,8 +152,8 @@ adb shell pm grant com.voicenotemd android.permission.DUMP  # if needed
 ### One-time setup
 
 ```bash
-git clone https://github.com/REPLACE_ME/voice-note-markdown.git
-cd voice-note-markdown
+git clone https://github.com/oierreaemme/notari.git
+cd notari
 
 # Generate the Gradle wrapper if not present (first clone only):
 gradle wrapper --gradle-version 8.10.2
