@@ -295,16 +295,21 @@ natively multimodal — but public LiteRT-LM inference of the audio variant on
 Android is not yet shipped. Once it is, the rewrite is local to `:core:asr` and
 everything from the capture screen upward stays the same.
 
-Two smaller items round out the v2 roadmap. **Function calling** on edge Gemma 4
-would let the structuring step return typed JSON via constrained sampling rather
-than prompt-engineered string output, removing most of the sanitization layer
-and unlocking calendar integration without leaving the device. And **a small
-bug in relative date resolution** surfaced during real-device testing: a meeting
-transcribed without an explicit date but with a specific time anchored to a past
-date instead of the next future occurrence — the resolver needs a "future bias"
-rule for ambiguous time-only references. Both are in the public issue tracker;
-neither blocks the v1 promise of *"speak, get a clean Markdown note, audio never
-leaves your phone."*
+One item rounds out the v2 roadmap: **function calling** on edge Gemma 4 would
+let the structuring step return typed JSON via constrained sampling rather than
+prompt-engineered string output, removing most of the sanitization layer and
+unlocking calendar integration without leaving the device. It's tracked in the
+public issue tracker and doesn't block the v1 promise of *"speak, get a clean
+Markdown note, audio never leaves your phone."*
+
+One real-device finding that *did* make it into v1: Gemma occasionally anchored
+a bare time like "at 3:30" to a past date instead of the next future occurrence.
+A conservative future-bias guard now rolls such ambiguous mentions forward — but
+only when the gap is small and the user used no explicit past reference
+("yesterday", "last Friday"), so genuine historical references are left alone.
+That class of bug is invisible until you dictate real notes on a real phone and
+read the timestamps back — which is why the evaluation loop runs on-device, not
+only in unit tests.
 
 ## Try it
 

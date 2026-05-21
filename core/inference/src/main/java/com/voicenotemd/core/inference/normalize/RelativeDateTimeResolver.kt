@@ -1,6 +1,7 @@
 package com.voicenotemd.core.inference.normalize
 
 import java.time.DayOfWeek
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -410,4 +411,69 @@ object RelativeDateTimeResolver {
             val daysUntil = ((target.value - today.dayOfWeek.value + 7) % 7).toLong()
             today.plusDays(daysUntil).atStartOfDay()
         }
+
+    /**
+     * Future-bias guard for datetimes that came from GEMMA's `iso_resolved` (NOT from
+     * [resolve], whose output is already future-correct via [nextDow]). Gemma
+     * occasionally anchors an ambiguous time-only mention to a past date — real-device
+     * 2026-05-19: a bare "alle quindici e trenta" came back dated three days earlier.
+     * For a voice note the intent is almost always the next future occurrence.
+     *
+     * Rolls [resolved] forward whole days (preserving its wall-clock time in [zone]) to
+     * the first occurrence at or after [now], but ONLY when all of these hold:
+     *  - [resolved] is before [now] (otherwise there is nothing to fix);
+     *  - the gap is at most [MAX_BACKSHIFT_DAYS] days (a datetime far in the past is more
+     *    likely a deliberate historical reference than a misanchored "this week");
+     *  - [surfaceForm] carries no explicit past-reference word ("ieri", "yesterday",
+     *    "hace", "letzte", …) — if the user pointed at the past, we respect it.
+     *
+     * Otherwise [resolved] is returned unchanged. This never fabricates a datetime; it
+     * only shifts one Gemma already produced, so the "no invention" pillar holds.
+     */
+    fun biasToFuture(
+        resolved: Instant,
+        surfaceForm: String,
+        now: Instant,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Instant {
+        if (!resolved.isBefore(now)) return resolved
+        if (Duration.between(resolved, now).toDays() > MAX_BACKSHIFT_DAYS) return resolved
+        if (hasPastReference(surfaceForm)) return resolved
+
+        val nowLocal = LocalDateTime.ofInstant(now, zone)
+        var shifted = LocalDateTime.ofInstant(resolved, zone)
+        while (shifted.isBefore(nowLocal)) {
+            shifted = shifted.plusDays(1)
+        }
+        return shifted.atZone(zone).toInstant()
+    }
+
+    private fun hasPastReference(surfaceForm: String): Boolean {
+        val words =
+            surfaceForm.lowercase(Locale.ROOT)
+                .split(NON_WORD)
+                .filter(String::isNotEmpty)
+        return words.any { it in PAST_REFERENCE_TOKENS }
+    }
+
+    private val NON_WORD = Regex("[^\\p{L}]+")
+
+    /** Words that explicitly anchor a mention in the past, across the v1 languages. */
+    private val PAST_REFERENCE_TOKENS =
+        setOf(
+            // it
+            "ieri", "scorso", "scorsa", "scorsi", "scorse", "fa", "passato", "passata",
+            // en
+            "yesterday", "last", "ago",
+            // es
+            "ayer", "anoche", "pasado", "pasada", "hace",
+            // fr
+            "hier", "dernier", "dernière", "passé", "passée",
+            // de
+            "gestern", "vorgestern", "letzte", "letzten", "letzter", "letztes", "vor",
+            // pt
+            "ontem", "anteontem", "passado", "passada", "atrás",
+        )
+
+    private const val MAX_BACKSHIFT_DAYS = 8L
 }

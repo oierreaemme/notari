@@ -258,8 +258,20 @@ class StructureNoteUseCaseImpl(
                 now = now,
             )
         val resolved =
-            deterministic
-                ?: raw.isoResolved?.takeIf(String::isNotBlank)?.let(::tryParseInstant)
+            if (deterministic != null) {
+                // Our deterministic resolver already biases weekdays/relative phrases to
+                // the future (nextDow), so its output is trusted as-is.
+                deterministic
+            } else {
+                // Gemma's own resolution. Apply the future-bias guard: Gemma sometimes
+                // anchors a bare time-only mention to a PAST date (real-device 2026-05-19:
+                // "alle quindici e trenta" → three days prior). See
+                // RelativeDateTimeResolver.biasToFuture for the exact, conservative rule.
+                raw.isoResolved
+                    ?.takeIf(String::isNotBlank)
+                    ?.let(::tryParseInstant)
+                    ?.let { RelativeDateTimeResolver.biasToFuture(it, raw.surfaceForm, now) }
+            }
         return DateMention(surfaceForm = raw.surfaceForm, resolved = resolved)
     }
 

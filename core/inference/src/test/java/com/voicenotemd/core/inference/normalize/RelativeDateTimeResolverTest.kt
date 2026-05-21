@@ -204,6 +204,75 @@ class RelativeDateTimeResolverTest {
         assertThat(RelativeDateTimeResolver.resolve("   ", "it", noon, romeZone)).isNull()
     }
 
+    // --- Future-bias guard ---
+    //
+    // Gemma occasionally anchors an ambiguous time-only mention to a PAST date
+    // (real-device 2026-05-19: "alle quindici e trenta" → a date 3 days prior).
+    // For a voice note the intent is almost always the next future occurrence.
+    // `biasToFuture` rolls a recent-past, no-past-reference datetime forward to
+    // the first occurrence at or after `now`. It runs only on the Gemma fallback
+    // path in StructureNoteUseCaseImpl — never on `resolve()`'s output, which is
+    // already future-correct via nextDow.
+
+    @Test
+    fun `biasToFuture rolls a recent past time forward to today`() {
+        // Gemma resolved a bare "15:30" to 2 days ago. now = Sat 2026-05-16 12:00 Rome.
+        val gemmaPast = LocalDateTime.of(2026, 5, 14, 15, 30).atZone(romeZone).toInstant()
+        val result =
+            RelativeDateTimeResolver.biasToFuture(
+                gemmaPast,
+                "alle quindici e trenta",
+                noon,
+                romeZone,
+            )
+        // Rolls forward whole days preserving 15:30 → today (Sat) at 15:30, which is
+        // after now (12:00).
+        assertThat(result).isEqualTo(
+            LocalDateTime.of(2026, 5, 16, 15, 30).atZone(romeZone).toInstant(),
+        )
+    }
+
+    @Test
+    fun `biasToFuture leaves an already-future datetime untouched`() {
+        val future = LocalDateTime.of(2026, 5, 20, 15, 30).atZone(romeZone).toInstant()
+        val result = RelativeDateTimeResolver.biasToFuture(future, "alle quindici e trenta", noon, romeZone)
+        assertThat(result).isEqualTo(future)
+    }
+
+    @Test
+    fun `biasToFuture respects an explicit past reference in the surface form`() {
+        val past = LocalDateTime.of(2026, 5, 14, 15, 30).atZone(romeZone).toInstant()
+        // "ieri" is an explicit past reference — the user means the past; do not shift.
+        val result = RelativeDateTimeResolver.biasToFuture(past, "ieri alle quindici e trenta", noon, romeZone)
+        assertThat(result).isEqualTo(past)
+    }
+
+    @Test
+    fun `biasToFuture respects past references across languages`() {
+        val past = LocalDateTime.of(2026, 5, 14, 15, 30).atZone(romeZone).toInstant()
+        val pastReferences =
+            listOf(
+                "yesterday at 3:30",
+                "ayer a las 15:30",
+                "hier à 15h30",
+                "gestern um 15:30",
+                "ontem às 15:30",
+            )
+        for (surface in pastReferences) {
+            val result = RelativeDateTimeResolver.biasToFuture(past, surface, noon, romeZone)
+            assertThat(result).isEqualTo(past)
+        }
+    }
+
+    @Test
+    fun `biasToFuture leaves a far-past datetime untouched as a likely historical reference`() {
+        // 30 days in the past, no past keyword — but too far back to be a misanchored
+        // "this week" reference. We don't second-guess it.
+        val farPast = LocalDateTime.of(2026, 4, 16, 15, 30).atZone(romeZone).toInstant()
+        val result = RelativeDateTimeResolver.biasToFuture(farPast, "alle quindici e trenta", noon, romeZone)
+        assertThat(result).isEqualTo(farPast)
+    }
+
     @Test
     fun `default zone parameter does not crash`() {
         // Smoke test the 3-arg overload (using system default).
