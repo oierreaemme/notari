@@ -75,33 +75,14 @@ jobs:
       # - name: Coverage gate
       #   run: ./gradlew jacocoTestCoverageVerification
 
-  screenshot-tests:
-    name: Screenshot tests (Roborazzi)
-    runs-on: ubuntu-latest
-    # Non-blocking until baseline screenshots are recorded and committed.
-    # `verifyRoborazzi` has no baselines to compare against yet, so it fails;
-    # that must not block the pipeline ahead of the Gemma 4 Challenge submission.
-    # Make this gating again once baselines exist (tracked for post-submission).
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: ${{ env.JAVA_VERSION }}
-
-      - uses: gradle/actions/setup-gradle@v4
-
-      - name: Verify screenshots
-        run: ./gradlew verifyRoborazzi
-
-      - name: Upload diffs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: roborazzi-diffs
-          path: '**/build/outputs/roborazzi/'
+  # Screenshot-test job removed for now. The Roborazzi Gradle plugin is declared
+  # in the version catalog but not yet applied to any module, so `verifyRoborazzi`
+  # / `recordRoborazzi` are not registered as tasks — the job could only ever fail
+  # with "task not found". Rather than ship a permanently-red (or noisy
+  # continue-on-error) job that tests nothing, the job is removed until the
+  # screenshot-testing setup is actually wired: apply the Roborazzi plugin to the
+  # feature modules, write the screenshot tests, record baselines, then re-add a
+  # gating `verifyRoborazzi` job here. Tracked as post-submission technical debt.
 
   privacy-gate:
     name: Privacy gate — no INTERNET permission in merged manifest
