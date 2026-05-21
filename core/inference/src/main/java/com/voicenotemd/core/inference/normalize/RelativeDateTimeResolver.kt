@@ -424,8 +424,11 @@ object RelativeDateTimeResolver {
      *  - [resolved] is before [now] (otherwise there is nothing to fix);
      *  - the gap is at most [MAX_BACKSHIFT_DAYS] days (a datetime far in the past is more
      *    likely a deliberate historical reference than a misanchored "this week");
-     *  - [surfaceForm] carries no explicit past-reference word ("ieri", "yesterday",
-     *    "hace", "letzte", …) — if the user pointed at the past, we respect it.
+     *  - [surfaceForm] names no specific non-future day — past ("ieri", "yesterday")
+     *    or present ("oggi", "today"). If the user named the day, we keep it; e.g.
+     *    "oggi alle 9:00" stays today even if 9:00 already passed. Future-day words
+     *    ("domani"/"tomorrow") are NOT in that set, so a mis-anchored "domani alle 9"
+     *    still gets rolled forward.
      *
      * Otherwise [resolved] is returned unchanged. This never fabricates a datetime; it
      * only shifts one Gemma already produced, so the "no invention" pillar holds.
@@ -438,7 +441,7 @@ object RelativeDateTimeResolver {
     ): Instant {
         if (!resolved.isBefore(now)) return resolved
         if (Duration.between(resolved, now).toDays() > MAX_BACKSHIFT_DAYS) return resolved
-        if (hasPastReference(surfaceForm)) return resolved
+        if (hasNonFutureDayAnchor(surfaceForm)) return resolved
 
         val nowLocal = LocalDateTime.ofInstant(now, zone)
         var shifted = LocalDateTime.ofInstant(resolved, zone)
@@ -448,31 +451,41 @@ object RelativeDateTimeResolver {
         return shifted.atZone(zone).toInstant()
     }
 
-    private fun hasPastReference(surfaceForm: String): Boolean {
+    private fun hasNonFutureDayAnchor(surfaceForm: String): Boolean {
         val words =
             surfaceForm.lowercase(Locale.ROOT)
                 .split(NON_WORD)
                 .filter(String::isNotEmpty)
-        return words.any { it in PAST_REFERENCE_TOKENS }
+        return words.any { it in NON_FUTURE_DAY_TOKENS }
     }
 
     private val NON_WORD = Regex("[^\\p{L}]+")
 
-    /** Words that explicitly anchor a mention in the past, across the v1 languages. */
-    private val PAST_REFERENCE_TOKENS =
+    /**
+     * Words that anchor a mention to a specific PAST or PRESENT (today) day, across the
+     * v1 languages. When any of these is present we leave the datetime where it is — the
+     * user named the day, so we must not roll the time to a different day (e.g. "oggi
+     * alle 9:00" stays today even if 9:00 has already passed).
+     *
+     * Future-day words ("domani", "tomorrow", "mañana", …) are deliberately NOT here: if
+     * the model mis-anchors "domani alle 9" to a past date, we DO want the future-bias
+     * guard to roll it forward. "aujourd'hui" splits into "aujourd"/"hui" under
+     * [NON_WORD]; we list "aujourd" so the French today-anchor is still caught.
+     */
+    private val NON_FUTURE_DAY_TOKENS =
         setOf(
-            // it
-            "ieri", "scorso", "scorsa", "scorsi", "scorse", "fa", "passato", "passata",
-            // en
-            "yesterday", "last", "ago",
-            // es
-            "ayer", "anoche", "pasado", "pasada", "hace",
-            // fr
-            "hier", "dernier", "dernière", "passé", "passée",
-            // de
-            "gestern", "vorgestern", "letzte", "letzten", "letzter", "letztes", "vor",
-            // pt
-            "ontem", "anteontem", "passado", "passada", "atrás",
+            // it — past + today
+            "ieri", "scorso", "scorsa", "scorsi", "scorse", "fa", "passato", "passata", "oggi",
+            // en — past + today
+            "yesterday", "last", "ago", "today",
+            // es — past + today
+            "ayer", "anoche", "pasado", "pasada", "hace", "hoy",
+            // fr — past + today
+            "hier", "dernier", "dernière", "passé", "passée", "aujourd", "hui",
+            // de — past + today
+            "gestern", "vorgestern", "letzte", "letzten", "letzter", "letztes", "vor", "heute",
+            // pt — past + today
+            "ontem", "anteontem", "passado", "passada", "atrás", "hoje",
         )
 
     private const val MAX_BACKSHIFT_DAYS = 8L

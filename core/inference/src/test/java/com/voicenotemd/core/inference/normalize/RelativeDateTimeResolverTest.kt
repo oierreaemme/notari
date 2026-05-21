@@ -265,6 +265,32 @@ class RelativeDateTimeResolverTest {
     }
 
     @Test
+    fun `biasToFuture keeps an explicit today anchor even when the time already passed`() {
+        // "oggi alle 9:00" said at 12:00: 9:00 today has passed, but the user named
+        // TODAY explicitly. We must NOT roll it to tomorrow — the day is anchored.
+        val todayButPast = LocalDateTime.of(2026, 5, 16, 9, 0).atZone(romeZone).toInstant()
+        val result = RelativeDateTimeResolver.biasToFuture(todayButPast, "oggi alle 9:00", noon, romeZone)
+        assertThat(result).isEqualTo(todayButPast)
+    }
+
+    @Test
+    fun `biasToFuture honors today anchors across languages`() {
+        val todayButPast = LocalDateTime.of(2026, 5, 16, 9, 0).atZone(romeZone).toInstant()
+        val todayPhrases =
+            listOf(
+                "today at 9",
+                "hoy a las 9",
+                "aujourd'hui à 9h",
+                "heute um 9",
+                "hoje às 9",
+            )
+        for (surface in todayPhrases) {
+            val result = RelativeDateTimeResolver.biasToFuture(todayButPast, surface, noon, romeZone)
+            assertThat(result).isEqualTo(todayButPast)
+        }
+    }
+
+    @Test
     fun `biasToFuture leaves a far-past datetime untouched as a likely historical reference`() {
         // 30 days in the past, no past keyword — but too far back to be a misanchored
         // "this week" reference. We don't second-guess it.
