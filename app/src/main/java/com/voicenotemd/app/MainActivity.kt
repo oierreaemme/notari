@@ -57,8 +57,14 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
+            // `remember` so the mapped Flow is created once, not rebuilt on every
+            // recomposition. Without it, the downstream collectAsState() resets each
+            // recomposition (lint: FlowOperatorInvokedInComposition). `settingsRepository`
+            // is a stable injected singleton, so no remember key is needed.
+            val lockRequiredFlow =
+                remember { settingsRepository.observe().map { it.requireBiometricUnlock } }
             VoiceNoteMarkdownAppContent(
-                lockRequiredFlow = settingsRepository.observe().map { it.requireBiometricUnlock },
+                lockRequiredFlow = lockRequiredFlow,
                 showPrompt = ::showBiometricPrompt,
             )
         }
