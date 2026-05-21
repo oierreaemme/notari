@@ -127,6 +127,7 @@ class CaptureViewModel
         fun onIntent(intent: CaptureUiIntent) {
             when (intent) {
                 CaptureUiIntent.ToggleRecord -> handleToggleRecord()
+                CaptureUiIntent.CancelRecording -> cancelRecording()
                 is CaptureUiIntent.PermissionResult -> handlePermissionResult(intent.granted)
                 is CaptureUiIntent.EditTitle -> updatePreview { it.copy(title = intent.title) }
                 is CaptureUiIntent.EditBody -> updatePreview { it.copy(bodyMarkdown = intent.body) }
@@ -234,6 +235,33 @@ class CaptureViewModel
 
         private fun onTranscriptChunk(chunk: TranscriptChunk) {
             _uiState.update { it.copy(partialTranscript = chunk.text) }
+        }
+
+        /**
+         * Abandon the in-progress recording without structuring or saving anything.
+         *
+         * The UI is reset to Idle synchronously for instant feedback; the recognizer's
+         * OS-side resources are released in the background via [SpeechToTextSession.stop],
+         * whose returned transcript we deliberately discard. Cancelling [recordingJob]
+         * also tears down the `rmsDb` collector through structured concurrency. No audio
+         * ever reached disk (ADR 0002), so this is a genuine discard.
+         *
+         * No-op outside [CaptureUiState.Phase.Recording] so a stray Cancel after stop
+         * (e.g. during Structuring) can't wipe a note that's already being processed.
+         */
+        private fun cancelRecording() {
+            if (_uiState.value.phase != CaptureUiState.Phase.Recording) return
+            recordingJob?.cancel()
+            recordingJob = null
+            _uiState.update {
+                CaptureUiState(
+                    activeLanguage = it.activeLanguage,
+                    isAppending = it.isAppending,
+                )
+            }
+            viewModelScope.launch {
+                runCatching { speechToTextSession.stop() }
+            }
         }
 
         private fun stopRecordingAndStructure() {

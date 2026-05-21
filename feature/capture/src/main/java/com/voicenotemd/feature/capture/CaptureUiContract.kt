@@ -73,6 +73,14 @@ sealed interface CaptureUiIntent {
     /** User tapped the record button while idle. Triggers permission check + start. */
     data object ToggleRecord : CaptureUiIntent
 
+    /**
+     * User abandoned the in-progress recording. The audio buffer and partial transcript
+     * are discarded — nothing is transcribed, structured, or saved — and the screen
+     * returns to [CaptureUiState.Phase.Idle]. No audio ever reached disk (ADR 0002), so
+     * this is a true discard, not a soft delete.
+     */
+    data object CancelRecording : CaptureUiIntent
+
     /** Permission system returned a result. Drives the next step. */
     data class PermissionResult(val granted: Boolean) : CaptureUiIntent
 

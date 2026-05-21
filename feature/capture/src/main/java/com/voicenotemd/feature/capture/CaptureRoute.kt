@@ -398,32 +398,46 @@ private fun RecordingPane(
             }
         }
 
-        Box(contentAlignment = Alignment.Center) {
-            // Anelli reattivi visibili solo durante la registrazione
-            if (isRecording) {
-                PulseRings(rmsLevel = state.rmsLevel, isRecording = true)
-                PulseRings(rmsLevel = state.rmsLevel * 0.5f, isRecording = true)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(contentAlignment = Alignment.Center) {
+                // Anelli reattivi visibili solo durante la registrazione
+                if (isRecording) {
+                    PulseRings(rmsLevel = state.rmsLevel, isRecording = true)
+                    PulseRings(rmsLevel = state.rmsLevel * 0.5f, isRecording = true)
+                }
+
+                FilledIconButton(
+                    onClick = { onIntent(CaptureUiIntent.ToggleRecord) },
+                    modifier = Modifier.size(112.dp),
+                    shape = CircleShape,
+                    colors =
+                        IconButtonDefaults.filledIconButtonColors(
+                            containerColor =
+                                if (isRecording) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
+                        ),
+                ) {
+                    Icon(
+                        imageVector = if (isRecording) Icons.Outlined.Stop else Icons.Outlined.Mic,
+                        contentDescription = if (isRecording) "Stop recording" else "Start recording",
+                        modifier = Modifier.size(48.dp),
+                    )
+                }
             }
 
-            FilledIconButton(
-                onClick = { onIntent(CaptureUiIntent.ToggleRecord) },
-                modifier = Modifier.size(112.dp),
-                shape = CircleShape,
-                colors =
-                    IconButtonDefaults.filledIconButtonColors(
-                        containerColor =
-                            if (isRecording) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.primary
-                            },
-                    ),
-            ) {
-                Icon(
-                    imageVector = if (isRecording) Icons.Outlined.Stop else Icons.Outlined.Mic,
-                    contentDescription = if (isRecording) "Stop recording" else "Start recording",
-                    modifier = Modifier.size(48.dp),
-                )
+            // Discard the in-progress take without structuring it. Shown only while
+            // recording; a low-emphasis text button so Stop stays the single prominent
+            // action (CLAUDE.md §8 recording UI).
+            if (isRecording) {
+                TextButton(
+                    onClick = { onIntent(CaptureUiIntent.CancelRecording) },
+                    modifier = Modifier.padding(top = 8.dp),
+                ) {
+                    Text("Discard")
+                }
             }
         }
     }

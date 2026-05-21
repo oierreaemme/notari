@@ -3,6 +3,7 @@ package com.voicenotemd.feature.capture
 import androidx.lifecycle.SavedStateHandle
 import com.google.common.truth.Truth.assertThat
 import com.voicenotemd.core.asr.SpeechToTextSession
+import com.voicenotemd.core.asr.TranscriptChunk
 import com.voicenotemd.core.common.domain.Language
 import com.voicenotemd.core.common.domain.Note
 import com.voicenotemd.core.common.domain.UserSettings
@@ -19,6 +20,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -251,5 +254,68 @@ class CaptureViewModelTest {
             // isAppending DEVE ancora essere true
             assertThat(viewModel.uiState.value.isAppending).isTrue()
             assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Idle) // because of reset
+        }
+
+    @Test
+    fun `cancel recording discards everything and returns to Idle without structuring`() =
+        runTest {
+            // Keep the recognizer flow open so the VM stays in Recording until we cancel.
+            every { speechToTextSession.rmsDb } returns emptyFlow()
+            every { speechToTextSession.start(any()) } returns
+                flow {
+                    emit(
+                        TranscriptChunk(
+                            "questa nota è sbagliata",
+                            isFinal = false,
+                            detectedLanguage = Language.Italian,
+                        ),
+                    )
+                    awaitCancellation()
+                }
+
+            viewModel = createViewModel()
+            viewModel.onIntent(CaptureUiIntent.ToggleRecord)
+            viewModel.onIntent(CaptureUiIntent.PermissionResult(granted = true))
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Recording)
+
+            // Abandon the recording.
+            currentTime += 1000
+            viewModel.onIntent(CaptureUiIntent.CancelRecording)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Back to a clean Idle screen, nothing carried over.
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Idle)
+            assertThat(viewModel.uiState.value.partialTranscript).isEmpty()
+            assertThat(viewModel.uiState.value.structuredPreview).isNull()
+            assertThat(viewModel.uiState.value.rmsLevel).isEqualTo(0f)
+            // The note was abandoned: structuring must never run.
+            coVerify(exactly = 0) { structureNoteUseCase.invoke(any(), any(), any()) }
+        }
+
+    @Test
+    fun `cancel recording preserves isAppending and active language`() =
+        runTest {
+            every { speechToTextSession.rmsDb } returns emptyFlow()
+            every { speechToTextSession.start(any()) } returns
+                flow {
+                    emit(TranscriptChunk("bozza", isFinal = false))
+                    awaitCancellation()
+                }
+
+            viewModel = createViewModel(appendId = "existing-note-id")
+            viewModel.onIntent(CaptureUiIntent.ToggleRecord)
+            viewModel.onIntent(CaptureUiIntent.PermissionResult(granted = true))
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Recording)
+
+            currentTime += 1000
+            viewModel.onIntent(CaptureUiIntent.CancelRecording)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Cancelling a recording must not drop the append context — the user is still
+            // appending to the same note, they just abandoned this take.
+            assertThat(viewModel.uiState.value.isAppending).isTrue()
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Idle)
         }
 }
