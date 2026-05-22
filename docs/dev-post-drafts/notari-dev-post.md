@@ -6,34 +6,36 @@
 
 ## The problem
 
-A bit over a year ago I tried to dictate a half-formed product idea on my
-way to a meeting. I knew I would forget the specifics by the time I got to
-a keyboard, so I tapped the microphone, talked for two minutes, and put the
-phone away.
+For months I'd been looking for a better way to catch what goes through my
+head — ideas, half-formed projects, notes to myself. I keep an Obsidian vault
+for the things that survive, and I even built myself a small LLM-powered wiki
+that I drive from the Gemini CLI. It works. But the more personal the note,
+the more the arrangement nagged at me: every thought I typed or dictated was a
+thought I was handing to someone else's server.
 
-When I went looking for it three weeks later, I scrolled through eighty
-audio files named `recording_2025-04-17_09-42-18.m4a`. I had a vague memory
-of the day. I did not have a vague memory of the time. I played nine of
-them back at 1.5× speed before giving up.
+The closest thing I had to a real capture tool was my Pixel's Recorder app. It
+transcribes as you speak, which felt like magic the first week. Then the
+friction set in. The transcript comes out as one wall of text — no title, no
+structure, nothing I can search by topic three weeks later — and it lives in my
+Google account, synced off the phone, not in my own files. To get anything into
+my Obsidian vault I had to replay the recording, copy the transcript out, and
+reformat it by hand. Capturing was easy; everything *after* capturing was the
+problem.
 
-This is the part of voice-note apps nobody markets. Capturing a voice note
-is easy — every phone has had a microphone button for fifteen years.
-**Finding** a voice note three weeks later, when you only half-remember when
-you said it and what you said, is where the entire premise quietly fails.
+There's a quieter failure underneath that one: the notes I *didn't* take. The
+thought I started to dictate late at night and then dropped, because I didn't
+want a recording of myself thinking out loud sitting on a server I don't
+control. Both failures share a root cause — the recording and the
+*understanding* of the recording happen in different places, owned by different
+parties, under different rules.
 
-And there's a second failure underneath the first: the voice notes you
-*didn't* record. The thought you started to dictate at 11 PM and put away
-half-pressed because you didn't want a recording of yourself reasoning out
-loud sitting in someone else's cloud. Both failures have the same root
-cause: the audio capture and the audio understanding live in different
-places, owned by different parties, on different rules.
-
-**Notari** is what happens when you put them back together on a single
-device. You speak. The phone transcribes locally, asks a small language
-model running on the phone to give the transcript a title, tags, parsed
-datetime references, and a clean Markdown body, and then forgets the audio
-buffer before anything is written to disk. The note becomes a file you can
-search, open, and export — not an audio blob you have to scrub through.
+**Notari** is my attempt to put them back on one device. You speak — or type,
+in the moments you can't speak. The phone transcribes locally, asks a small
+language model running on the phone to give the transcript a title, tags,
+parsed datetime references, and a clean Markdown body, and then forgets the
+audio buffer before anything is written to disk. What you get is a Markdown
+file you own — searchable, editable, and ready to drop straight into a vault
+like Obsidian. Nothing leaves the phone unless you decide to export it.
 
 ## The approach
 
@@ -179,21 +181,98 @@ When Moshi still rejects the result, the use case retries once with a stricter
 as a plain-text note with a friendly non-blocking notice — the user never
 lands on an error screen.
 
-### Multilingual native, by detection rather than translation
+### Multilingual native — same language in, same language out
 
-The app supports voice notes in English, Italian, Spanish, French, German,
-and Portuguese. The interesting choice here is what the app *doesn't* do: it
-does not translate. The Android `SpeechRecognizer` returns a transcript in the
-user's dictated language, and the structuring prompt instructs the model to
-write `title`, `tags`, and `body_markdown` in that same language, not in
-English. There is no "translate to canonical language for storage"
-intermediate step. An Italian dictation produces an Italian Markdown note; a
-Portuguese dictation produces a Portuguese Markdown note. This sounds obvious
-until you realize that most LLM-based productivity tools default to English
-output regardless of input language — a quiet indignity that becomes loud once
-you notice it. Six languages is a v1 choice limited by what `SpeechRecognizer`
-reliably handles on shipped Android devices; more will follow as the speech
-path is upgraded.
+The app supports voice notes in English, Italian, Spanish, French, German, and
+Portuguese. The interesting choice here is what the app *doesn't* do: it does
+not translate. Once the recognizer has produced a transcript, the structuring
+prompt instructs the model to write `title`, `tags`, and `body_markdown` in that
+same language, not in English. There is no "translate to canonical language for
+storage" intermediate step — an Italian dictation produces an Italian Markdown
+note, a Portuguese dictation a Portuguese one. This sounds obvious until you
+realize that most LLM-based productivity tools default to English output
+regardless of input language — a quiet indignity that becomes loud once you
+notice it.
+
+One honest caveat lives upstream of all this, at the speech layer, and it took a
+real multilingual test to surface it: Android's `SpeechRecognizer` does **not**
+reliably detect the spoken language — you tell it which language to expect.
+Notari's "Auto" setting therefore means *use the phone's system language*, not
+*figure out what I'm speaking*. On an English-locale phone, dictating Italian
+under "Auto" comes back as garbled English, so a multilingual user pins Italian
+first — one tap on the capture screen, where the chip now shows the effective
+locale (e.g. "AUTO · EN") so the fallback is never a surprise. I'd rather be
+straight about that than ship a magic-detection claim the platform can't honor.
+Real spoken-language detection is a speech-path upgrade on the roadmap (see
+*What's next*). Six languages is a v1 choice limited by what `SpeechRecognizer`
+reliably handles on shipped Android devices; more follow as that path improves.
+
+### When you can't speak: Silent Mic
+
+A voice note app has one obvious blind spot — the moments you can't talk. On a
+plane, on a train, in a meeting where saying your notes out loud would be
+absurd — or at 3 a.m., when you wake up with a dream you want to pin down and
+don't want to wake the person sleeping next to you. I hit those moments
+constantly, so the capture screen has a second entrance: a keyboard icon that opens **Silent Mic**, a plain text field that
+feeds straight into the same structuring pipeline. You type the messy thought
+instead of speaking it, Gemma 4 gives it the same title-tags-datetime-Markdown
+treatment, and the result is indistinguishable from a dictated note. It cost
+almost nothing architecturally — the structuring step never cared whether the
+transcript came from the microphone or the keyboard — and it means the app
+still works in exactly the situations where a pure voice recorder goes mute.
+The typed text never leaves the device either; the privacy promise covers both
+doors.
+
+### Markdown that round-trips into your vault
+
+The whole point of structuring a note is that you can take it somewhere else.
+Every note exports as a portable Markdown file with **YAML frontmatter** — the
+metadata block Obsidian, Hugo, Jekyll, LogSeq and most static-site tools already
+understand. A single renderer feeds both the single-note share sheet and the
+batch "export selected notes to a ZIP," so a file you share and a file you
+bulk-export are byte-for-byte identical. The frontmatter carries everything
+Gemma 4 extracted, not just a flat string:
+
+```yaml
+---
+title: "Riunione con Marco — progetto Atlas"
+created: 2026-05-14T22:31:07Z
+updated: 2026-05-14T22:33:50Z
+language: it
+tags: [riunione, progetto-atlas, onboarding]
+mentions:
+  - surface: "domani alle 15"
+    iso: 2026-05-15T15:00:00Z
+structured: true
+---
+
+# Riunione con Marco — progetto Atlas
+…
+```
+
+The `mentions` block is the part I'm most pleased with: it keeps both the phrase
+the user actually said ("domani alle 15") and the resolved ISO timestamp the
+model inferred, side by side — so the date Gemma understood survives into the
+file instead of being flattened away. Drop the note into an Obsidian vault and
+the tags become vault tags, the dates become queryable properties, and the note
+stops being trapped inside one app. A tool that ignores frontmatter still
+renders the document correctly, thanks to the `# Title` heading and the body
+below the block. This is what closed the loop on the problem I started with:
+getting a structured note out of the recorder and into the place where I
+actually keep my knowledge.
+
+### A note you can find — and keep adding to
+
+Capturing was never the hard part of the original problem; finding the note
+three weeks later was. So the notes list is built for retrieval: a debounced
+search across titles and bodies, and a tag-chip filter that narrows to a single
+topic — both running entirely over the local Room database, so no search index
+ever leaves the device. And because a thought is rarely finished in one sitting,
+any note can be extended by voice: open it, tap the mic, dictate the follow-up,
+and the new dictation is structured on its own and appended to the existing
+note, with the two tag sets merged. Select several notes and you can export the
+whole set at once as a ZIP of Markdown files. Capture, find, extend, take it
+with you — the loop a flat wall of recorder transcripts could never close.
 
 ### Audio non-persistence — verifiable, not asserted
 
@@ -209,6 +288,10 @@ permission, and a CI gate parses the merged manifest of every commit to
 enforce that no transitive library quietly reintroduces it. Privacy claims
 that depend on developer discipline rot; privacy claims that fail the build at
 PR time hold.
+
+Privacy doesn't end at the network boundary, either. Settings can require a
+fingerprint or face unlock every time the app opens, so your notes stay sealed
+even when the phone itself is unlocked and sitting in someone else's hands.
 
 ### LiteRT-LM integration: lazy load, GPU-first, thermally aware
 
@@ -243,7 +326,13 @@ note it later"*, the model kept that exact uncertainty in the body, without
 trying to fill in what "something about sensors" might have been. It also
 preserved transcription errors that came out garbled from speech-to-text
 without rewriting them into something plausible. That conservatism is what
-makes the output trustworthy. The prompt does most of the work — an ABSOLUTE
+makes the output trustworthy — and it has a cost worth being honest about. When
+speech-to-text mangles a word, the model leaves the mangled word in place
+rather than guessing what you meant, so a note can occasionally read a little
+oddly. That's a deliberate trade: I'd rather take an odd word I can fix in two
+taps than a confident rewrite I'd never think to check, which is exactly why
+every note stays fully editable before and after saving. The prompt does most
+of the work — an ABSOLUTE
 RULES section, clear examples, an explicit "when in doubt, keep the original
 word" clause — and E2B follows it reliably enough that I have not needed a
 hallucination-recovery path on top.
@@ -275,6 +364,20 @@ output, plan on a sanitization layer between the model and a strict parser —
 you'll need it occasionally, and adding it once beats living with intermittent
 parse failures.
 
+There's a mental adjustment that has to happen first, and it's worth naming
+because it colored everything else. We've all gotten used to what the cloud
+giants — Google, Anthropic, OpenAI — let us do, and the first time you hold a
+model entirely on your own phone, with no account and no network, the instinct
+is to expect one of *those*, just smaller. It isn't. E2B is a small model, and
+treating it like a shrunken GPT is the fastest route to disappointment. The
+whole game is the opposite: find the narrow thing it does genuinely well — here,
+disciplined structure-extraction from a transcript — build the product tightly
+around that, and design so its weak spots never get the chance to show. Once I
+stopped asking it to be clever and started asking it to be reliable, it stopped
+feeling like a compromise and started feeling like the right tool. Having a
+capable LLM in your pocket, fully private, with no cloud behind it, is genuinely
+a small marvel — as long as you meet it on its own terms.
+
 The recommendation, if you're starting from here: lean on a strict schema in
 the prompt and a forgiving parser in the code, not the other way around. E2B
 follows a firm, opinionated, example-rich prompt with surprising consistency,
@@ -293,7 +396,10 @@ collapse to voice → Gemma 4 (multimodal) → structured note in a single forwa
 pass. The model weights are already designed for that — Gemma 4 E2B and E4B are
 natively multimodal — but public LiteRT-LM inference of the audio variant on
 Android is not yet shipped. Once it is, the rewrite is local to `:core:asr` and
-everything from the capture screen upward stays the same.
+everything from the capture screen upward stays the same. It also folds in real
+spoken-language detection — the thing Android's `SpeechRecognizer` can't do
+today, which is why "Auto" currently falls back to the phone's system language —
+because a multimodal model can infer the language straight from the audio.
 
 One item rounds out the v2 roadmap: **function calling** on edge Gemma 4 would
 let the structuring step return typed JSON via constrained sampling rather than
@@ -310,6 +416,18 @@ only when the gap is small and the user used no explicit past reference
 That class of bug is invisible until you dictate real notes on a real phone and
 read the timestamps back — which is why the evaluation loop runs on-device, not
 only in unit tests.
+
+## A personal note
+
+A personal note, since this is a personal project: I'm not a professional
+Android developer. I had one Gemma app behind me and a lot of help — from AI
+coding assistants and from documentation I read three times over. For twenty
+days the loudest feeling wasn't excitement, it was the fear that I'd spend all
+of them and end up with a submission that wouldn't land, or with something
+short of what I'd pictured. The morning the whole test suite finally went green,
+after hours of it staying stubbornly red, was the closest this project came to a
+celebration. I'm leaving that here because "built with Gemma 4" should include
+the honest version of who built it and how.
 
 ## Try it
 

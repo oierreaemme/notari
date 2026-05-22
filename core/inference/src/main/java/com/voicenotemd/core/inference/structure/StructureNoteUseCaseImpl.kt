@@ -12,6 +12,7 @@ import com.voicenotemd.core.common.usecase.StructuringResult
 import com.voicenotemd.core.inference.normalize.MarkdownBodyFormatter
 import com.voicenotemd.core.inference.normalize.RelativeDateTimeResolver
 import com.voicenotemd.core.inference.normalize.TagValidator
+import com.voicenotemd.core.inference.prompt.LanguageScopedPromptTemplate
 import com.voicenotemd.core.inference.prompt.PromptTemplate
 import com.voicenotemd.core.inference.prompt.StricterPromptTemplate
 import com.voicenotemd.core.inference.schema.StructuredNoteParser
@@ -41,8 +42,6 @@ class StructureNoteUseCaseImpl(
     private val clock: Clock = Clock.systemUTC(),
     private val idGenerator: () -> String = { UUID.randomUUID().toString() },
 ) : StructureNoteUseCase {
-    private val stricterPrompt = StricterPromptTemplate(basePrompt)
-
     /**
      * Delegates to [GemmaSession.warmUp] so the ~1.5 GB engine can be loaded while the
      * user is dictating, eliminating the cold-start latency from the first inference.
@@ -108,12 +107,21 @@ class StructureNoteUseCaseImpl(
         // new one ("app-development" already exists → don't emit "app" for the same
         // topic). See ADR 0012.
         val now = Instant.now(clock)
+        // When the user has PINNED a language, wrap the base prompt with an explicit
+        // single-language directive so the pin actually constrains the model's output.
+        // forceLanguage previously never reached the prompt (it only set the stored
+        // Language enum + ASR locale), so Gemma auto-detected and could emit a mixed-
+        // language title or foreign tags on a short note (real device, 2026-05-22).
+        // With no pin, the base prompt's own "detect the language" rule applies.
+        val effectiveBase: PromptTemplate =
+            forceLanguage?.let { LanguageScopedPromptTemplate(basePrompt, it) } ?: basePrompt
+        val stricterPrompt = StricterPromptTemplate(effectiveBase)
         val backend = session.backend()
         val pass1Budget = coldStartBudgetFor(cleaned, backend)
         val pass1Outcome =
             runCatching {
                 withTimeoutOrNull(pass1Budget) {
-                    session.generate(basePrompt.render(cleaned, now, existingTags = existingTags))
+                    session.generate(effectiveBase.render(cleaned, now, existingTags = existingTags))
                 }
             }
         val pass1Raw: String? = pass1Outcome.getOrNull()
@@ -210,17 +218,24 @@ class StructureNoteUseCaseImpl(
         val rawTags = s.tags.mapNotNull(Tag::normalize).distinct()
         val validatedTags = TagValidator.validate(rawTags, transcript, existingTags)
 
-        // 3. Body: enforce checkbox/bullet line breaks and collapse blank lines.
-        val formattedBody = MarkdownBodyFormatter.format(s.bodyMarkdown)
-
         // 4. Title: strip trailing punctuation that the model occasionally adds
-        //    ("Riunione con Marco." or "Domani?"), then cap.
+        //    ("Riunione con Marco." or "Domani?"), then cap. (Computed before the
+        //    body so we can de-duplicate a repeated title heading below.)
         val cleanedTitle =
             s.title
                 .trim()
                 .trimEnd(*TRAILING_TITLE_PUNCTUATION)
                 .take(MAX_TITLE_LEN)
                 .trim()
+
+        // 3. Body: drop a leading `# Title` heading E2B sometimes repeats despite
+        //    the prompt forbidding it (the title is a separate field, and the
+        //    exporter adds its own H1), then enforce checkbox/bullet line breaks
+        //    and collapse blank lines.
+        val formattedBody =
+            MarkdownBodyFormatter.format(
+                stripDuplicateTitleHeading(s.bodyMarkdown, cleanedTitle),
+            )
 
         return Note(
             id = idGenerator(),
@@ -233,6 +248,30 @@ class StructureNoteUseCaseImpl(
             updatedAt = now,
             structured = true,
         )
+    }
+
+    /**
+     * Drop a leading `# Heading` from [body] when its text matches [title].
+     *
+     * The prompt forbids repeating the title as a top-level heading (the title is
+     * a separate field, and the exporter prepends its own `# Title`), but E2B
+     * occasionally emits it anyway — which shows the title twice in the note
+     * detail view. Stripping it is content-preserving: the title is already kept
+     * in the title field. Only an exact (case-insensitive) match is removed, so a
+     * genuine, different section heading at the top is left untouched.
+     */
+    private fun stripDuplicateTitleHeading(
+        body: String,
+        title: String,
+    ): String {
+        val trimmed = body.trimStart()
+        if (!trimmed.startsWith("#")) return body
+        val newlineIdx = trimmed.indexOf('\n')
+        val firstLine = if (newlineIdx < 0) trimmed else trimmed.substring(0, newlineIdx)
+        val headingText = firstLine.trimStart('#').trim()
+        val titleText = title.trim()
+        if (titleText.isEmpty() || !headingText.equals(titleText, ignoreCase = true)) return body
+        return if (newlineIdx < 0) "" else trimmed.substring(newlineIdx + 1).trimStart()
     }
 
     /**

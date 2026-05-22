@@ -1,5 +1,6 @@
 package com.voicenotemd.core.inference.prompt
 
+import com.voicenotemd.core.common.domain.Language
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -98,5 +99,35 @@ class StricterPromptTemplate(private val basePrompt: PromptTemplate) : PromptTem
     ): String =
         "RETURN JSON ONLY. NO OTHER TEXT. The previous response could not be parsed. " +
             "Output the structured note for the following transcript.\n\n" +
+            basePrompt.render(transcript, now, zone, existingTags)
+}
+
+/**
+ * Wraps [basePrompt] with an explicit single-language directive, used ONLY when the
+ * user has pinned a dictation language.
+ *
+ * Why this exists: previously `forceLanguage` set the stored [Language] enum and the
+ * ASR recognizer locale, but it never reached the structuring prompt — so Gemma always
+ * auto-detected, and on short notes E2B could slip (real device, 2026-05-22: an English
+ * dictation produced a mixed IT/EN title and Italian tags). When the user has pinned a
+ * language, prepending a blunt "write EVERYTHING in <lang>" instruction makes the pin
+ * actually constrain the output. With no pin this decorator is simply not used, so the
+ * base prompt's own "detect the language" rule still governs the auto case unchanged.
+ */
+class LanguageScopedPromptTemplate(
+    private val basePrompt: PromptTemplate,
+    private val language: Language,
+) : PromptTemplate {
+    override fun render(
+        transcript: String,
+        now: Instant,
+        zone: ZoneId,
+        existingTags: List<String>,
+    ): String =
+        "LANGUAGE LOCK — the user selected \"${language.bcp47}\" as the dictation " +
+            "language. Write the \"title\", every entry in \"tags\", \"body_markdown\", " +
+            "and each date \"surface_form\" ALL in \"${language.bcp47}\". Do NOT mix " +
+            "languages and do NOT borrow the language of the examples below. The " +
+            "\"language\" field MUST be \"${language.bcp47}\".\n\n" +
             basePrompt.render(transcript, now, zone, existingTags)
 }

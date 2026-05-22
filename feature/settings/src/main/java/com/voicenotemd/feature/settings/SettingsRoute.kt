@@ -244,8 +244,9 @@ private fun SettingsContent(
 
         Section(title = "Language") {
             Text(
-                "By default we let the recognizer auto-detect the language. Pin a " +
-                    "language here if auto-detection is unreliable on your device.",
+                "By default, dictation uses your phone's system language. Android's " +
+                    "speech recognizer doesn't detect the spoken language on its own, " +
+                    "so pin a language here if you dictate in a different one.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             LanguagePicker(

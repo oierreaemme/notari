@@ -275,8 +275,10 @@ private fun LanguagePickerSheet(
                 fontWeight = FontWeight.SemiBold,
             )
             ListItem(
-                headlineContent = { Text("Auto-detect") },
-                supportingContent = { Text("Use the device default") },
+                headlineContent = { Text("Auto (phone language)") },
+                supportingContent = {
+                    Text("Uses your phone's language — pin one below if you dictate in another")
+                },
                 trailingContent =
                     if (current == null) {
                         { Text("✓", style = MaterialTheme.typography.titleMedium) }
@@ -349,7 +351,13 @@ private fun RecordingPane(
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         LanguageChip(
-            label = state.activeLanguage?.recognizerLocale?.uppercase() ?: "AUTO",
+            // When no language is pinned, "Auto" means the recognizer uses the phone's
+            // system locale (SpeechRecognizer does not detect the spoken language). Show
+            // that effective locale — e.g. "AUTO · EN" — so a multilingual user on an
+            // English phone can see at a glance that Italian dictation needs pinning.
+            label =
+                state.activeLanguage?.recognizerLocale?.uppercase()
+                    ?: "AUTO · ${java.util.Locale.getDefault().language.uppercase()}",
             onClick = { onIntent(CaptureUiIntent.OpenLanguagePicker) },
         )
 

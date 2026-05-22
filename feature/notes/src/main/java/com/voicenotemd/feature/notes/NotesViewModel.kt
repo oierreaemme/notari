@@ -143,7 +143,6 @@ class NotesViewModel
                     }
                 NotesUiIntent.ClearSelection -> _uiState.update { it.copy(selectedNoteIds = emptySet()) }
                 NotesUiIntent.RequestExport -> viewModelScope.launch { _uiEvents.emit(NotesUiEvent.TriggerZipPicker) }
-                is NotesUiIntent.ExportToZip -> Unit // Gestito separatamente per evitare il Context nel ViewModel se passiamo URI, oppure...
                 NotesUiIntent.RequestDeleteSelected ->
                     _uiState.update {
                         if (it.selectedNoteIds.isEmpty()) it else it.copy(showDeleteSelectedConfirm = true)

@@ -40,8 +40,6 @@ sealed interface NotesUiIntent {
 
     data object RequestExport : NotesUiIntent
 
-    data class ExportToZip(val uri: android.net.Uri) : NotesUiIntent
-
     /** User tapped the trash icon while in selection mode → show the confirm dialog. */
     data object RequestDeleteSelected : NotesUiIntent
 
