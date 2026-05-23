@@ -83,7 +83,7 @@ The prompt is versioned in `core/inference/src/main/assets/prompts/structure_not
 
 ### Robust parsing — the model will be sloppy
 
-Even with a strict prompt, real E2B output has variance: trailing commas, occasional Markdown fences, an extra explanation after the closing brace. The parser strips ` ```json ` fences, trims everything before the first `{` and after the last balanced `}`, and hands the cleaned slice to Moshi configured as **lenient**. If that fails, we retry once with a stricter `RETURN JSON ONLY. NO OTHER TEXT.` preamble; if *that* fails, we fall back to saving the raw transcript as a plain-text note. The user always keeps their content.
+Even with a strict prompt, real E2B output has variance: trailing commas, occasional Markdown fences, an extra explanation after the closing brace. The parser strips any leading or trailing Markdown code fences, trims everything before the first `{` and after the last balanced `}`, and hands the cleaned slice to Moshi configured as **lenient**. If that fails, we retry once with a stricter `RETURN JSON ONLY. NO OTHER TEXT.` preamble; if *that* fails, we fall back to saving the raw transcript as a plain-text note. The user always keeps their content.
 
 ### Audio non-persistence — the privacy backbone
 

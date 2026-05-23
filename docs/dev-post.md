@@ -80,7 +80,7 @@ The prompt is versioned in `core/inference/src/main/assets/prompts/structure_not
 
 Even with a strict prompt, real E2B output has variance: trailing commas, occasional Markdown fences, an extra explanation appended after the closing brace. The parser:
 
-- Strips ` ```json ` fences if present.
+- Strips any leading or trailing Markdown code fences if present.
 - Trims everything before the first `{` and after the last balanced `}`.
 - Hands the cleaned slice to Moshi configured as **lenient**.
 
