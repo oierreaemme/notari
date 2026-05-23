@@ -31,7 +31,9 @@ track.
 
 ## Demo
 
-Coming soon — demo GIF and 90-second walkthrough.
+[![Notari — 90-second walkthrough](https://img.youtube.com/vi/3U477zIH7FA/hqdefault.jpg)](https://www.youtube.com/watch?v=3U477zIH7FA)
+
+90-second walkthrough: recording, on-device structuring, Markdown export, and the airplane-mode privacy proof.
 
 ## How it works
 

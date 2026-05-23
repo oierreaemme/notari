@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-24
+
+First public release — submitted to the Google Gemma 4 Challenge ("Build With Gemma 4" track). On-device voice capture, Gemma 4 E2B structuring to Markdown, Room persistence, and the zero-network / zero-audio-persistence privacy guarantees. Everything below is the development history that led to v1.0.0.
+
 ### Fixed — Example leakage, language bleeding, inference contention, and ASR segment drops (2026-05-22)
 - Few-shot example leakage (Pillar 4): the model was emitting the CONTENT of the worked examples (Marco/Atlassian/Jira, "NTR-432", "fiori per Laura") as if it were the user's note. New prompt `structure_note_v10.txt` (active) cuts the examples from 10 to 3 short, low-salience ones, replaces specific names/tickets with bland placeholders, and adds a blunt anti-copy guard before the transcript. (Superseded the unshipped v9.) See [ADR 0017](docs/decisions/0017-language-bleeding-and-inference-contention.md) and `docs/prompt-evaluations/example-leakage-v10.md`.
 - Mixed-language notes: pinned-language dictation no longer produces mixed titles/tags. The language lock now uses the language name (e.g. "English") not the bare BCP-47 code, the existing-tags corpus is scoped to the active language in `CaptureViewModel`, and the prompt requires tags in the note's own language.

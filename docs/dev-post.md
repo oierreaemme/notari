@@ -41,7 +41,9 @@ The app is opinionated: it transforms the transcript faithfully, never paraphras
 
 ## Demo
 
-*(60-90 second walkthrough — embed link to be added)*
+{% embed https://www.youtube.com/watch?v=3U477zIH7FA %}
+
+*(If the embed doesn't render in the dev.to editor, paste the bare URL on its own line — dev.to auto-embeds YouTube.)*
 
 ## Technical highlights
 
@@ -153,8 +155,9 @@ Three upgrades on the roadmap that I deliberately cut from v1 to ship within the
 
 ## Try it
 
-- **Code:** [GitHub repo link]
-- **APK:** [release download link]
+- **Code:** https://github.com/oierreaemme/notari
+- **Video:** https://www.youtube.com/watch?v=3U477zIH7FA
+- **APK:** https://github.com/oierreaemme/notari/releases/download/v1.0.0/notari-v1.0.0.apk *(confirm this matches the release tag + asset filename you upload)*
 - **Architecture, ADRs, prompts:** see `docs/` in the repo
 - **License:** Apache 2.0
 
