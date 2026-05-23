@@ -12,7 +12,10 @@ import com.voicenotemd.core.common.repository.SettingsRepository
 import com.voicenotemd.core.common.usecase.SaveNoteUseCase
 import com.voicenotemd.core.common.usecase.StructureNoteUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.Clock
+import java.time.Instant
 import java.util.Locale
+import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,9 +26,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.Clock
-import java.time.Instant
-import javax.inject.Inject
 
 /**
  * Drives the recording → structuring → review → save flow.
