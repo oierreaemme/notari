@@ -1,6 +1,8 @@
 # Notari — voice notes that never leave your phone, structured by Gemma 4
 
 > *Built for the [Google Gemma 4 Challenge](https://dev.to/) — "Build With Gemma 4" track.*
+>
+> **Note:** this is the long-form working draft. The version actually published to dev.to (structured on the official challenge template) is [`dev-post-submission.md`](dev-post-submission.md).
 
 ---
 
@@ -63,12 +65,16 @@ The model is asked for one thing: a JSON object matching a fixed schema. No pros
 }
 ```
 
-The prompt is versioned in `core/inference/src/main/assets/prompts/structure_note_vN.txt`. The active version is referenced from `AssetPromptLoader.ACTIVE_PROMPT` — every change to the prompt is a versioned, file-based change with a corresponding ADR. We're on v5 at the time of writing, evolved from v1 through five rounds of real-corpus testing:
+The prompt is versioned in `core/inference/src/main/assets/prompts/structure_note_vN.txt`. The active version is referenced from `AssetPromptLoader.ACTIVE_PROMPT` — every change to the prompt is a versioned, file-based change with a corresponding ADR. The active version is **v10**, evolved from v1 through ten rounds of real-corpus testing:
 
 - **v2** condensed the few-shot examples after E2B started over-mimicking long examples.
 - **v3** added a `CURRENT TIMESTAMP` block so the model could resolve "tomorrow at 3pm" to a real ISO instant.
 - **v4** fixed four E2B-specific failure modes: confusing `mentions[]` with named entities, dropping `- [ ]` checkboxes for spoken commitments, collapsing enumerations into prose, and never using `##` headings on multi-topic notes. The fix in every case was changing the framing from "you may" to "REQUIRED".
 - **v5** added an `EXISTING TAGS` section populated at render time with the user's current tag corpus, plus a reuse rule with a worked example. Across several sessions on the same topic, Gemma was coining near-synonyms (`app`, `app-development`, `dev`); v5 nudges it to reuse what's already there.
+- **v6** added orthographic cleanup rules (fix false starts and obvious mis-hearings without changing meaning).
+- **v7** slimmed the prompt back down — removed verbose formatting-whitespace rules that were eating the cold-start prefill budget.
+- **v8** added a FINAL CHECKLIST before generation and a headings-preserve-prose rule, then had to be trimmed again when the extra ~1000 characters pushed cold-start over budget on a Pixel 6a.
+- **v10** fixed the most important bug of the project (Pillar 4): E2B was occasionally emitting the *content* of the worked examples as if it were the user's note. The fix cut the examples from ten to three short, low-salience ones, replaced specific names and ticket numbers with bland placeholders, and added a blunt anti-copy guard right before the transcript. v10 also moved the language lock from the bare BCP-47 code to the language name ("English"), which stopped mixed-language titles and tags. (v9 was an unshipped intermediate.)
 
 ### Robust parsing — the model will be sloppy
 
