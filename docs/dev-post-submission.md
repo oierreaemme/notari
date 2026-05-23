@@ -34,8 +34,6 @@ No step touches the network. The `INTERNET` permission isn't declared in the mer
 
 {% embed https://www.youtube.com/watch?v=3U477zIH7FA %}
 
-*(If the embed doesn't render in the dev.to editor, paste the bare URL on its own line — dev.to auto-embeds YouTube.)*
-
 ## Code
 
 - **Repository:** https://github.com/oierreaemme/notari
