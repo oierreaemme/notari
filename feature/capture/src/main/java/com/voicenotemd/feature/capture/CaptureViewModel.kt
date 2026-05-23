@@ -6,11 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.voicenotemd.core.asr.SpeechToTextSession
 import com.voicenotemd.core.asr.TranscriptChunk
 import com.voicenotemd.core.common.domain.Language
+import com.voicenotemd.core.common.domain.Note
 import com.voicenotemd.core.common.repository.NoteRepository
 import com.voicenotemd.core.common.repository.SettingsRepository
 import com.voicenotemd.core.common.usecase.SaveNoteUseCase
 import com.voicenotemd.core.common.usecase.StructureNoteUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,16 +72,45 @@ class CaptureViewModel
         private var lastToggleAtMs: Long = 0L
 
         /**
-         * Snapshot of the tag corpus already in use across the user's notes. Maintained by
-         * an `observeAllTags()` collector and read at structure time to nudge Gemma toward
-         * reusing an existing tag instead of coining a synonymous new one (see ADR 0012).
+         * Snapshot of the user's notes, used to derive the tag corpus passed to Gemma at
+         * structure time (see ADR 0012). We keep whole notes — not just a flat tag list —
+         * so we can scope the corpus to the active dictation language and avoid feeding
+         * Italian tags into an English note (ADR 0017: cross-language tag contamination
+         * was a source of mixed-language output on real devices, 2026-05-22).
          *
          * `@Volatile` so the value written from the collector coroutine is visible to the
          * structuring coroutine when it reads. Empty list = no consistency pressure (first
          * note ever, or before the flow has emitted).
          */
         @Volatile
-        private var existingTags: List<String> = emptyList()
+        private var existingNotes: List<Note> = emptyList()
+
+        /**
+         * Tag corpus to pass to Gemma for a note in [forcedLanguage].
+         *
+         * When a language is pinned we restrict the corpus to tags from notes in THAT
+         * language, so the model is never nudged to reuse a tag in the wrong language
+         * (which then bleeds into the title/body via autoregressive generation). When no
+         * language is pinned (auto-detect) we pass the whole corpus unchanged — the prompt's
+         * own "tags in the note's own language" rule is the guard in that case.
+         */
+        private fun tagCorpusFor(forcedLanguage: Language?): List<String> =
+            existingNotes
+                .let { notes ->
+                    if (forcedLanguage != null) notes.filter { it.language == forcedLanguage } else notes
+                }
+                .flatMap { it.tags }
+                .map { it.value }
+                .distinct()
+
+        /**
+         * The device-locale language, used as the working language when the user has not
+         * pinned one ("Auto"). Falls back to English when the device locale isn't one of the
+         * supported languages, so the prompt always gets a concrete steer.
+         */
+        private fun deviceLocaleLanguage(): Language =
+            Language.fromBcp47(Locale.getDefault().language)
+                .takeIf { it != Language.Unknown } ?: Language.English
 
         init {
             // Surface the user's language preference so the UI can show the active locale chip.
@@ -92,8 +123,8 @@ class CaptureViewModel
             // can pass it to Gemma. Room's Flow emits on every change, so deletes and
             // edits are reflected without us reloading manually.
             viewModelScope.launch {
-                noteRepository.observeAllTags().collect { tags ->
-                    existingTags = tags.map { it.value }
+                noteRepository.observeAll().collect { notes ->
+                    existingNotes = notes
                 }
             }
             // Fire-and-forget engine warm-up. The user typically takes a few seconds to
@@ -307,9 +338,18 @@ class CaptureViewModel
             }
 
             val forcedLanguage = settingsRepository.observe().first().forcedLanguage
-            // Pass the current tag corpus snapshot so Gemma is nudged to reuse an
-            // existing tag rather than coin a synonymous new one (ADR 0012).
-            val result = structureNote(transcript, forcedLanguage, existingTags)
+            // Resolve the working language. In "Auto" (no explicit pin) we fall back to the
+            // device locale rather than leaving the model to auto-detect: Android's
+            // SpeechRecognizer has no real language auto-detection, so it already transcribes
+            // in the device language. Steering the structuring prompt to that same language
+            // keeps title/tags/body consistent instead of the mixed-language output we saw on
+            // short notes (real device 2026-05-22). An explicit pick from the selector always
+            // overrides this. See ADR 0017.
+            val effectiveLanguage = forcedLanguage ?: deviceLocaleLanguage()
+            // Pass the current tag corpus snapshot so Gemma is nudged to reuse an existing tag
+            // rather than coin a synonymous new one (ADR 0012), scoped to the working language
+            // so we don't feed cross-language tags (ADR 0017).
+            val result = structureNote(transcript, effectiveLanguage, tagCorpusFor(effectiveLanguage))
             val note = result.note
 
             _uiState.update {

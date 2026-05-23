@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Example leakage, language bleeding, inference contention, and ASR segment drops (2026-05-22)
+- Few-shot example leakage (Pillar 4): the model was emitting the CONTENT of the worked examples (Marco/Atlassian/Jira, "NTR-432", "fiori per Laura") as if it were the user's note. New prompt `structure_note_v10.txt` (active) cuts the examples from 10 to 3 short, low-salience ones, replaces specific names/tickets with bland placeholders, and adds a blunt anti-copy guard before the transcript. (Superseded the unshipped v9.) See [ADR 0017](docs/decisions/0017-language-bleeding-and-inference-contention.md) and `docs/prompt-evaluations/example-leakage-v10.md`.
+- Mixed-language notes: pinned-language dictation no longer produces mixed titles/tags. The language lock now uses the language name (e.g. "English") not the bare BCP-47 code, the existing-tags corpus is scoped to the active language in `CaptureViewModel`, and the prompt requires tags in the note's own language.
+- Auto language mode: with no explicit pin, the structuring language now follows the device locale (Android's `SpeechRecognizer` has no real language auto-detection, so it already transcribes in the device language). This stops the half-and-half output on short notes in Auto. An explicit pick from the selector always overrides.
+- Spurious timeouts: a timed-out native inference no longer contends with the next capture — `LiteRtLmGemmaSession.generate()` is single-flighted so two native inferences never run at once. The shorter prompt also reduces CPU prefill cost; timeout budgets unchanged.
+- Empty/junk datetime chips: mentions with an empty or literal `"null"` surface form are dropped, so a note with no time reference no longer shows a stray "null" chip. Genuinely vague phrases ("una di queste sere") are kept.
+- ASR dropping words on pauses: pending partial transcripts are now committed before each recogniser restart (no lost speech), and transient errors (`RECOGNIZER_BUSY`/`NETWORK`/`SERVER`) restart with backoff + `cancel()` instead of ending the recording.
+- Export timestamps: `created`/`updated` and mention `iso` in the exported Markdown front-matter are now written in the device's local timezone with offset (e.g. `2026-05-22T22:41:25+02:00`) instead of UTC `Z`, so the exported note matches the time the app displays. Instants are still stored in UTC internally.
+
 ### Fixed — Pass 1 budget too small on CPU fallback path (2026-05-17 evening)
 - Real-device test on a Pixel where `Backend.GPU()` init fails with a
   LiteRT-LM internal error: the session correctly falls back to

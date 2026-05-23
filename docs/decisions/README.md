@@ -22,6 +22,7 @@ template](https://github.com/joelparkerhenderson/architecture-decision-record/bl
 | 0014 | Accepted | [Orthographic cleanup: where "transform" stops being "invent"](0014-orthographic-cleanup.md) |
 | 0015 | Accepted | [LLM emits intent, deterministic code imposes form](0015-llm-intent-code-form.md) |
 | 0016 | Accepted | [Separate engine load from inference timeout](0016-engine-load-inference-split.md) |
+| 0017 | Accepted | [Language bleeding and inference contention](0017-language-bleeding-and-inference-contention.md) |
 
 ## Adding a new ADR
 

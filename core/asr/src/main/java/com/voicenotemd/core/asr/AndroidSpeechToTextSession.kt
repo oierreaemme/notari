@@ -57,6 +57,25 @@ class AndroidSpeechToTextSession(
                     .also { this@AndroidSpeechToTextSession.recognizer = it }
 
             var accumulatedTranscript = ""
+            // The best partial of the CURRENT segment. SpeechRecognizer only delivers a
+            // committed `onResults` when it cleanly detects end-of-speech; on a NO_MATCH,
+            // timeout, or transient error (BUSY/NETWORK/SERVER) it ends the segment WITHOUT
+            // an `onResults`, and the words it had already recognized would be lost. We keep
+            // the latest partial here and flush it before restarting so no speech is dropped.
+            var currentPartial = ""
+
+            // Append [currentPartial] to the running transcript and emit it, then clear it.
+            // Called on any segment end that did NOT go through `onResults` (which commits
+            // and clears `currentPartial` itself, so this is a no-op in the normal path).
+            fun commitPendingPartial() {
+                val pending = currentPartial.trim()
+                if (pending.isEmpty()) return
+                accumulatedTranscript =
+                    if (accumulatedTranscript.isEmpty()) pending else "$accumulatedTranscript $pending"
+                lastTranscript = accumulatedTranscript
+                currentPartial = ""
+                trySend(TranscriptChunk(accumulatedTranscript, isFinal = true, detectedLanguage = language))
+            }
 
             val intent =
                 android.content.Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -79,6 +98,9 @@ class AndroidSpeechToTextSession(
                         val list = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
                         val best = list.firstOrNull().orEmpty()
                         if (best.isNotEmpty()) {
+                            // Remember this segment's partial so it can be salvaged if the
+                            // segment ends without a committed `onResults`.
+                            currentPartial = best
                             val fullText = if (accumulatedTranscript.isEmpty()) best else "$accumulatedTranscript $best"
                             lastTranscript = fullText
                             trySend(TranscriptChunk(fullText, isFinal = false, detectedLanguage = language))
@@ -97,6 +119,12 @@ class AndroidSpeechToTextSession(
                                 }
                             lastTranscript = accumulatedTranscript
                             trySend(TranscriptChunk(accumulatedTranscript, isFinal = true, detectedLanguage = language))
+                            // This segment committed cleanly — nothing left to salvage.
+                            currentPartial = ""
+                        } else {
+                            // Empty final but we may have buffered a partial for this segment
+                            // (some OEMs deliver text only via onPartialResults). Don't drop it.
+                            commitPendingPartial()
                         }
                         // Continuous-listen mode: SpeechRecognizer fires `onResults` whenever it
                         // *thinks* the user has paused (which is overeager in real-world dictation,
@@ -105,7 +133,7 @@ class AndroidSpeechToTextSession(
                         // Instead, we restart `startListening` to capture the next utterance segment.
                         // The user terminates the recording explicitly via the stop button — that
                         // sets [stopRequested] true, and the handler below skips the restart.
-                        scheduleRestartIfRunning(intent)
+                        scheduleRestartIfRunning(intent, RESTART_DELAY_MS)
                     }
 
                     override fun onError(error: Int) {
@@ -116,14 +144,30 @@ class AndroidSpeechToTextSession(
                             SpeechRecognizer.ERROR_NO_MATCH,
                             SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
                             -> {
-                                // User is thinking / pausing. Restart silently so the recording
-                                // tolerates long natural gaps.
-                                scheduleRestartIfRunning(intent)
+                                // User is thinking / pausing. Salvage whatever this segment
+                                // recognized, then restart so the recording tolerates long
+                                // natural gaps without dropping the words spoken so far.
+                                commitPendingPartial()
+                                scheduleRestartIfRunning(intent, RESTART_DELAY_MS)
+                            }
+                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
+                            SpeechRecognizer.ERROR_NETWORK,
+                            SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
+                            SpeechRecognizer.ERROR_SERVER,
+                            -> {
+                                // Transient: the recognizer service was still tearing down the
+                                // previous segment when we asked it to restart (the "stops then
+                                // restarts" symptom). Do NOT close the recording. Salvage the
+                                // partial and retry after a longer backoff; the restart helper
+                                // calls cancel() first to reset the service state.
+                                commitPendingPartial()
+                                scheduleRestartIfRunning(intent, BUSY_RESTART_DELAY_MS)
                             }
                             else -> {
-                                // Fatal error (mic unavailable, audio path broken, etc.). Close the
-                                // flow so the ViewModel sees natural completion and falls back to
-                                // "Nothing was captured" UX.
+                                // Genuinely fatal (ERROR_AUDIO, ERROR_INSUFFICIENT_PERMISSIONS,
+                                // ERROR_LANGUAGE_*). Salvage anything captured, then close the
+                                // flow so the ViewModel sees natural completion.
+                                commitPendingPartial()
                                 close()
                             }
                         }
@@ -173,16 +217,33 @@ class AndroidSpeechToTextSession(
      * calling restart synchronously from inside a callback occasionally throws
      * IllegalStateException on some OEMs.
      */
-    private fun scheduleRestartIfRunning(intent: android.content.Intent) {
+    private fun scheduleRestartIfRunning(
+        intent: android.content.Intent,
+        delayMs: Long,
+    ) {
         if (stopRequested.get()) return
         mainHandler.postDelayed({
             if (stopRequested.get()) return@postDelayed
             val r = this@AndroidSpeechToTextSession.recognizer ?: return@postDelayed
             try {
+                // cancel() first resets the recognizer service to a clean idle state. Without
+                // it, a startListening() that lands while the previous segment is still tearing
+                // down throws/reports ERROR_RECOGNIZER_BUSY, which previously killed the session.
+                r.cancel()
                 r.startListening(intent)
             } catch (_: Exception) {
             }
-        }, 50L)
+        }, delayMs)
+    }
+
+    private companion object {
+        // Normal gap between utterance segments — the empirical minimum that keeps the
+        // platform recognizer happy when restarting back-to-back.
+        const val RESTART_DELAY_MS = 50L
+
+        // Longer backoff after a transient error (BUSY/NETWORK/SERVER) so the recognizer
+        // service has time to finish releasing the previous session before we reuse it.
+        const val BUSY_RESTART_DELAY_MS = 300L
     }
 
     override suspend fun stop(): String {

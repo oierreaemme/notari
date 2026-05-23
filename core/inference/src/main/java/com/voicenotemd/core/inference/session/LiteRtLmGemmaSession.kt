@@ -146,6 +146,23 @@ class LiteRtLmGemmaSession(
      */
     private val engineLoadMutex = Mutex()
 
+    /**
+     * Single-flights the actual inference so two native generations never run at once.
+     *
+     * Why this matters: `Conversation.sendMessage()` is a synchronous, blocking native
+     * (C++) call. When the structuring use-case's `withTimeoutOrNull` fires, it cancels
+     * the *Kotlin* coroutine, but the native thread keeps running to completion — Kotlin
+     * cancellation does not propagate into LiteRT-LM. Before this guard, starting a second
+     * capture while a timed-out inference was still spinning launched a SECOND native
+     * inference concurrently; on the CPU fallback path the two saturated the cores,
+     * causing thermal throttling and making *every* subsequent note time out too (the
+     * recurring contention pattern, ADR 0016/0017). With this mutex the next generation
+     * waits for the in-flight one to finish instead of piling on, so the device only ever
+     * runs one inference at a time. A waiting caller is still cancellable while suspended,
+     * so a use-case timeout on the waiter falls through to the plain-text fallback cleanly.
+     */
+    private val generationMutex = Mutex()
+
     // Singleton — unregisterComponentCallbacks non necessario, viviamo per la vita del processo
     init {
         context.applicationContext.registerComponentCallbacks(this)
@@ -156,7 +173,12 @@ class LiteRtLmGemmaSession(
     override suspend fun generate(prompt: String): String =
         withContext(dispatchers.default) {
             val engine = engineRef.get() ?: ensureEngineLoaded()
-            runGenerate(engine, prompt)
+            // Serialize the native inference itself. Engine loading above is intentionally
+            // outside this lock (it has its own engineLoadMutex), so a background warm-up
+            // can still proceed while a generation is in flight.
+            generationMutex.withLock {
+                runGenerate(engine, prompt)
+            }
         }
 
     /**

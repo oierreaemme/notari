@@ -212,7 +212,16 @@ class StructureNoteUseCaseImpl(
                 ?: Language.Unknown
 
         // 1. Mentions: deterministic override for simple relative expressions.
-        val mentions = s.mentions.map { resolveMention(it, s.languageBcp47, now) }
+        //    First drop JUNK mentions: when a note has no time reference at all, E2B
+        //    sometimes still emits a placeholder mention with an empty surface_form or the
+        //    literal string "null"/"none" (real device 2026-05-22: the "montagna" note
+        //    showed a "null" datetime chip). These carry no information and must never
+        //    surface in the UI. A genuinely vague-but-real phrase ("una di queste sere")
+        //    has a real surface_form and is kept, resolving to null by design.
+        val mentions =
+            s.mentions
+                .filter { it.surfaceForm.isJunkDateSurface().not() }
+                .map { resolveMention(it, s.languageBcp47, now) }
 
         // 2. Tags: hallucination guard against the transcript + prior corpus.
         val rawTags = s.tags.mapNotNull(Tag::normalize).distinct()
@@ -312,6 +321,17 @@ class StructureNoteUseCaseImpl(
                     ?.let { RelativeDateTimeResolver.biasToFuture(it, raw.surfaceForm, now) }
             }
         return DateMention(surfaceForm = raw.surfaceForm, resolved = resolved)
+    }
+
+    /**
+     * True when a mention's surface form carries no real date/time reference and is just
+     * a placeholder the model emitted for a note that has none. We drop these so the UI
+     * never shows an empty or `"null"` datetime chip. A real vague phrase like "una di
+     * queste sere" is NOT junk — it has meaningful text and is kept (resolving to null).
+     */
+    private fun String.isJunkDateSurface(): Boolean {
+        val s = trim().trim('"').trim()
+        return s.isEmpty() || s.equals("null", ignoreCase = true) || s.equals("none", ignoreCase = true)
     }
 
     private fun tryParseInstant(iso: String): Instant? {

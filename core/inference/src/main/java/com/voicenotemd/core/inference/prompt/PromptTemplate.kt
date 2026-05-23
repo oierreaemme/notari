@@ -124,10 +124,15 @@ class LanguageScopedPromptTemplate(
         zone: ZoneId,
         existingTags: List<String>,
     ): String =
-        "LANGUAGE LOCK — the user selected \"${language.bcp47}\" as the dictation " +
-            "language. Write the \"title\", every entry in \"tags\", \"body_markdown\", " +
-            "and each date \"surface_form\" ALL in \"${language.bcp47}\". Do NOT mix " +
-            "languages and do NOT borrow the language of the examples below. The " +
-            "\"language\" field MUST be \"${language.bcp47}\".\n\n" +
+        // Use the human-readable language NAME ("English", "Italian") as the primary
+        // instruction, with the BCP-47 code in parentheses for the schema's `language`
+        // field. For a 2B-effective on-device model the explicit language name is a far
+        // stronger steer than the bare code "en"/"it" (real device, 2026-05-22: bare
+        // code still let short English notes slip into Italian title/tags).
+        "LANGUAGE LOCK — the user selected ${language.name} (BCP-47 \"${language.bcp47}\") " +
+            "as the dictation language. Write the \"title\", every entry in \"tags\", " +
+            "\"body_markdown\", and each date \"surface_form\" ENTIRELY in ${language.name}. " +
+            "Do NOT mix languages and do NOT borrow the language of the examples below. " +
+            "The \"language\" field MUST be \"${language.bcp47}\".\n\n" +
             basePrompt.render(transcript, now, zone, existingTags)
 }

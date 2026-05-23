@@ -21,6 +21,27 @@ class AssetPromptLoader(private val context: Context) {
 
     companion object {
         /**
+         * v10 (2026-05-22) fixes few-shot example LEAKAGE. On real-device traces the
+         * E2B model was emitting the CONTENT of the worked examples (Marco/Atlassian/
+         * Jira, "NTR-432", "fiori per Laura") as if it were the user's note — a Pillar 4
+         * (no-hallucination) violation. Small INT4 models attend to long, vivid examples
+         * over a short transcript buried at the end. v10:
+         *   - cuts examples from 6 to 3 short, low-salience ones (less to copy);
+         *   - replaces specific names/tickets with bland placeholders;
+         *   - adds a blunt anti-copy guard immediately before the TRANSCRIPT, telling the
+         *     model the examples are format-only and never to reuse their content/names.
+         *   See ADR 0017 and docs/prompt-evaluations/example-leakage-v10.md.
+         *
+         * v9 (2026-05-22) targets two real-device problems: English dictation producing
+         * mixed IT/EN titles & tags, and short notes timing out on the CPU fallback path.
+         *   - LANGUAGE BALANCE: v8's 10 few-shot examples were 9 Italian : 1 English.
+         *     v9 rebalanced to 6 examples, 3 EN : 3 IT.
+         *   - TAG LANGUAGE GUARD: never reuse an EXISTING TAG whose language differs
+         *     from the note; coin a fresh one in the note's language.
+         *   - PREFILL COST: pruning examples cut the static prompt size to reduce CPU
+         *     prefill time. (v9 never shipped — superseded by v10 before reaching device.)
+         *   See ADR 0017 and docs/prompt-evaluations/language-balance-v9.md.
+         *
          * v8 fixes the "event description dropped under `##` heading" regression
          * caught in real-device traces 2026-05-16. When the user dictated
          * *"riunione con Marco e il team di Atlassian alle 15:30 per parlare della
@@ -90,6 +111,6 @@ class AssetPromptLoader(private val context: Context) {
          * Earlier prompts stay in assets/ as legacy. To roll back, point this constant
          * at the prior version.
          */
-        const val ACTIVE_PROMPT = "structure_note_v8.txt"
+        const val ACTIVE_PROMPT = "structure_note_v10.txt"
     }
 }
