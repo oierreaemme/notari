@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-05-24
+
+### Fixed — Critical crash on recording stop (release APK only)
+
+- **Root cause:** `proguard-rules.pro` had no keep rule for `com.google.ai.edge.litertlm.**`. R8 in the release build obfuscated and class-merged the LiteRT-LM Kotlin bindings (`Engine` → `s2.f`, `ConversationConfig` → `R8$$REMOVED$$CLASS$$503`, `Content` → `R8$$REMOVED$$CLASS$$501`, etc.). The native `.so` calls `FindClass("com/google/ai/edge/litertlm/ConversationConfig")` by its original Java name at inference time; after R8 the class no longer exists under that name → `null` → SIGSEGV → process killed. Every user who stopped a recording was affected.
+- **Fix (primary):** Added `-keep class com.google.ai.edge.litertlm.** { *; }` and `-dontwarn com.google.ai.edge.litertlm.**` to `proguard-rules.pro`. All LiteRT-LM classes now retain their original names in the release APK. The stale `-keep class com.google.mediapipe.**` comment updated to reflect the actual runtime (LiteRT-LM, not MediaPipe Tasks).
+- **Fix (secondary):** `structure()` calls in `CaptureViewModel` were not wrapped in `runCatching`. Any unexpected exception (e.g. DataStore I/O failure, unforeseen inference error) would propagate to `viewModelScope.launch {}` and kill the app. Both call sites (`stopRecordingAndStructure` and `handleSubmitText`) now wrap the call; `CancellationException` is re-thrown so structured concurrency is preserved; all other failures surface a friendly "Something went wrong — please try again." error message.
+
 ## [1.0.0] - 2026-05-24
 
 First public release — submitted to the Google Gemma 4 Challenge ("Build With Gemma 4" track). On-device voice capture, Gemma 4 E2B structuring to Markdown, Room persistence, and the zero-network / zero-audio-persistence privacy guarantees. Everything below is the development history that led to v1.0.0.

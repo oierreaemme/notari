@@ -180,7 +180,16 @@ class CaptureViewModel
         private fun handleSubmitText(text: String) {
             _uiState.update { it.copy(showTextInput = false, partialTranscript = text) }
             viewModelScope.launch {
-                structure(text)
+                runCatching { structure(text) }.onFailure { e ->
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    _uiState.update {
+                        it.copy(
+                            phase = CaptureUiState.Phase.Idle,
+                            structuringStartedAtMs = null,
+                            errorMessage = "Something went wrong — please try again.",
+                        )
+                    }
+                }
             }
         }
 
@@ -312,7 +321,19 @@ class CaptureViewModel
                     runCatching { speechToTextSession.stop() }
                         .getOrDefault(transcript)
                         .ifBlank { transcript }
-                structure(finalTranscript)
+                runCatching { structure(finalTranscript) }.onFailure { e ->
+                    // Re-throw CancellationException so structured concurrency is respected.
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    // Any other unexpected exception (should not happen — StructureNoteUseCase is
+                    // contractually infallible — but the safety net prevents a silent process kill).
+                    _uiState.update {
+                        it.copy(
+                            phase = CaptureUiState.Phase.Idle,
+                            structuringStartedAtMs = null,
+                            errorMessage = "Something went wrong — please try again.",
+                        )
+                    }
+                }
             }
         }
 
