@@ -3,6 +3,14 @@
 Date: 2026-05-15
 Status: Accepted
 
+> **Update (2026-05-26):** The "encrypt the Room database" hardening pass
+> mentioned under *Alternatives considered* is now decided in
+> [ADR 0019](0019-encryption-at-rest-decoupled-from-biometric.md) — with a
+> deliberate divergence: encryption is **always on and bound to a device-bound
+> Keystore key**, not coupled to biometric auth. This lock stays exactly as
+> described here: opt-in, UX-only, defending device-shared access. At-rest
+> protection is now owned by ADR 0019, not by this lock.
+
 ## Context
 
 Notes contain meeting decisions, half-formed ideas, personal reflections — the

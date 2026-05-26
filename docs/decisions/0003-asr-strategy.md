@@ -1,8 +1,15 @@
 # ADR 0003 — ASR strategy: SpeechRecognizer for v1, Gemma audio for v2
 
-- **Status:** Accepted
+- **Status:** Accepted (v2 direction superseded by [ADR 0018](0018-continuous-streaming-asr-vosk.md))
 - **Date:** 2026-05-09
 - **Deciders:** Notari engineering
+
+> **Update (2026-05-26):** The v1 decision (ship `SpeechRecognizer`) still
+> describes what is in the code. The **v2 direction has changed**: real-world
+> long/hands-free dictation exposed `SpeechRecognizer`'s irreducible
+> capture-gap limit, so the replacement engine is now **Vosk** (continuous
+> streaming), not Gemma-audio. Gemma-audio is deprioritised to a v3
+> exploration. See [ADR 0018](0018-continuous-streaming-asr-vosk.md).
 
 ## Context
 

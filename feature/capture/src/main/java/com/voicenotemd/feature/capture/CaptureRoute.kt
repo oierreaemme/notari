@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -341,6 +343,13 @@ private fun RecordingPane(
     onIntent: (CaptureUiIntent) -> Unit,
 ) {
     val isRecording = state.phase == CaptureUiState.Phase.Recording
+    val transcriptScroll = rememberScrollState()
+    // Keep the latest words in view as the transcript grows during long dictation.
+    LaunchedEffect(state.partialTranscript) {
+        if (transcriptScroll.maxValue > 0) {
+            transcriptScroll.animateScrollTo(transcriptScroll.maxValue)
+        }
+    }
     Column(
         modifier =
             Modifier
@@ -364,7 +373,9 @@ private fun RecordingPane(
         Column(
             modifier =
                 Modifier
+                    .weight(1f)
                     .fillMaxWidth()
+                    .verticalScroll(transcriptScroll)
                     .padding(top = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {

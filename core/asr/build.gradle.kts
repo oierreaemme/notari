@@ -12,6 +12,9 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.android)
 
+    // On-device continuous-streaming ASR (ADR 0018).
+    implementation(libs.vosk.android)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)

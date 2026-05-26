@@ -46,6 +46,10 @@ litertLm = "0.11.0"
 # Markdown rendering
 markwon = "4.6.2"
 
+# ASR (on-device, continuous streaming). See ADR 0018.
+# NOTE: confirm the latest published version against Maven Central at build time.
+vosk = "0.3.47"
+
 # JSON
 moshi = "1.15.1"
 
@@ -115,6 +119,9 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 
 # Google AI Edge LiteRT-LM (Gemma inference). Reads .litertlm files.
 litertlm = { group = "com.google.ai.edge.litertlm", name = "litertlm-android", version.ref = "litertLm" }
+
+# Vosk on-device streaming ASR (continuous capture). See ADR 0018.
+vosk-android = { group = "com.alphacephei", name = "vosk-android", version.ref = "vosk" }
 
 # Markdown rendering
 markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }

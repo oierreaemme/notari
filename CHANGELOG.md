@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Continuous-streaming ASR (Vosk) behind the existing seam (spike)
+
+- New `VoskSpeechToTextSession` owns the microphone via a single continuous `AudioRecord` and streams PCM frames into a Vosk recognizer. This eliminates the `SpeechRecognizer` segment gap that dropped words and emitted earcons during long, hands-free dictation — the recurring complaint when dictating long notes (e.g. in the car). See [ADR 0018](docs/decisions/0018-continuous-streaming-asr-vosk.md).
+- `FallbackSpeechToTextSession` routes to Vosk when a model is present for the language, and to the `SpeechRecognizer`-backed `AndroidSpeechToTextSession` otherwise, so devices without a model keep working.
+- `FileVoskModelProvider` resolves and caches the per-language model from `filesDir/vosk-models/<bcp47>`; `VoskResultParser` (pure, JVM-unit-tested) extracts the spoken text from Vosk's JSON.
+- Evolved the `:core:asr` privacy guard: `AudioRecord` is now permitted, but only in `VoskSpeechToTextSession`; all audio-persistence sinks stay banned and a new test asserts the PCM buffer is zeroed on stop. The cardinal rule (audio never leaves the device, never written to disk) is unchanged.
+- **Status: spike.** Needs an on-device build + validation on the Pixel 6a (push a model, then test long / in-car / multi-language dictation). Screen-off/background capture (a `microphone` foreground service) and Bluetooth audio routing are tracked as ADR 0018 follow-ups. ADR 0018 stays `Proposed` until validated.
+
+### Decisions
+
+- [ADR 0018](docs/decisions/0018-continuous-streaming-asr-vosk.md) — replace `SpeechRecognizer` with continuous-streaming Vosk (Proposed; supersedes the v2 direction of ADR 0003).
+- [ADR 0019](docs/decisions/0019-encryption-at-rest-decoupled-from-biometric.md) — always-on encryption at rest with a device-bound Keystore key, decoupled from the biometric lock (Proposed).
+
 ## [1.0.1] - 2026-05-24
 
 ### Fixed — Critical crash on recording stop (release APK only)

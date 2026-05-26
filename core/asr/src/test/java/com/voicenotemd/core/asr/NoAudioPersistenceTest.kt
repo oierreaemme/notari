@@ -49,10 +49,30 @@ class NoAudioPersistenceTest {
     }
 
     @Test
-    fun `no source file should reference AudioRecord in code`() {
-        // SpeechRecognizer is fine — that's the OS-managed path. Direct AudioRecord access
-        // would mean we own the byte buffer ourselves, which we deliberately avoid in v1.
-        assertNoMatch("AudioRecord")
+    fun `AudioRecord is referenced only in the Vosk session file`() {
+        // Evolved guard (ADR 0018): the Vosk continuous-streaming path owns the mic, so
+        // AudioRecord is now permitted — but ONLY in VoskSpeechToTextSession. The real
+        // invariant (no persistence sink; buffer zeroed) is enforced by the other tests
+        // here. Owning a RAM-only PCM buffer does not violate the cardinal rule or pillar 2.
+        val offenders =
+            sourceRoot.walkTopDown()
+                .filter { it.isFile && it.extension == "kt" }
+                .filter { stripComments(it.readText()).contains("AudioRecord") }
+                .map { it.name }
+                .toList()
+        assertThat(offenders).containsExactly("VoskSpeechToTextSession.kt")
+    }
+
+    @Test
+    fun `Vosk session overwrites its PCM buffer with zeros on stop`() {
+        // The privacy contract for the owned buffer (ADR 0002 / ADR 0019): the in-RAM PCM
+        // buffer MUST be zeroed before release. Assert the zeroing call is present so it
+        // cannot be silently dropped in a refactor.
+        val session =
+            sourceRoot.walkTopDown()
+                .firstOrNull { it.isFile && it.name == "VoskSpeechToTextSession.kt" }
+                ?: error("VoskSpeechToTextSession.kt not found under $sourceRoot")
+        assertThat(session.readText()).contains("readBuffer.fill(0)")
     }
 
     private fun assertNoMatch(needle: String) {
