@@ -155,3 +155,31 @@ a system service we cannot inspect. No new permission is added beyond
   behind the same interface.
 - Update ADR 0003's status annotation and CLAUDE.md §4 (ASR v2 line) to point
   to this decision.
+
+## Amendment — 2026-05-27: validated on-device; engine pivots to whisper.cpp (batch)
+
+The plan above (continuous capture + **Vosk streaming**) was built and validated on the
+Pixel 6a. The in-car *plumbing* all works: continuous `AudioRecord` capture, Bluetooth mic
+routing, and a `microphone` foreground service for screen-off recording. But Vosk's accuracy
+was the dealbreaker this ADR's "Alternatives considered" anticipated — the small Italian
+model garbles English / code-switching and degrades on imperfect speech, fatal for tech notes.
+
+Per this ADR's own fallback clause, we pivoted to **whisper.cpp behind the same
+`SpeechToTextSession` seam, as a batch transcriber** (capture PCM to RAM, transcribe once at
+stop). whisper is window-based, and hands-free in the car there is no value in a live
+transcript anyway. **Validated on-device 2026-05-27** with multilingual `ggml-base.bin`:
+Italian faithful, English brand/jargon (e.g. "Ableton") correct — night-and-day better than
+Vosk. (One miss observed: "synth" → "sint".)
+
+Build lesson: AGP compiles the native debug variant unoptimized, and whisper.cpp is ~20×
+slower without `-O3`, so the CMakeLists forces `-O3` into the debug flags.
+
+Trade-offs accepted: batch adds a transcription wait after stop (Vosk transcribed for free
+during recording), so end-to-end is somewhat slower; mitigated by loading/freeing the model
+around the call and, if needed, dropping base → tiny. The Vosk path stays in the tree,
+unwired, for reference.
+
+**Remaining before this flips to Accepted:** a real in-car test with Bluetooth + whisper
+together; model delivery (shared with ADR 0008); a dedicated "Transcribing…" UI phase; and
+removing the spike diagnostic logs + restoring release ABIs. A dedicated ADR 0020 may later
+formalise "whisper.cpp batch" as the engine of record.

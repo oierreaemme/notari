@@ -42,6 +42,10 @@ class BatchSpeechToTextSession(
     private val stopRequested = AtomicBoolean(false)
     private val captureStopped = AtomicBoolean(false)
 
+    // Dictation language for the batch transcriber, captured at start(); "auto" = detect.
+    @Volatile
+    private var activeLanguageBcp47: String = "auto"
+
     // Captured PCM chunks (copies of each read), concatenated at stop. RAM only; zeroed
     // after transcription. Guarded by [capturedLock] — appended on the reader thread, read
     // on the stop() coroutine.
@@ -60,6 +64,7 @@ class BatchSpeechToTextSession(
         callbackFlow {
             stopRequested.set(false)
             captureStopped.set(false)
+            activeLanguageBcp47 = if (language == Language.Unknown) "auto" else language.bcp47
             synchronized(capturedLock) { captured.clear() }
 
             // Route to a Bluetooth headset mic if connected (in-car / hands-free). ADR 0018.
@@ -128,7 +133,7 @@ class BatchSpeechToTextSession(
 
         val transcript =
             withContext(Dispatchers.Default) {
-                transcriber.transcribe(pcm, SAMPLE_RATE)
+                transcriber.transcribe(pcm, SAMPLE_RATE, activeLanguageBcp47)
             }
 
         // Privacy: overwrite the captured audio in RAM as soon as it has been transcribed.

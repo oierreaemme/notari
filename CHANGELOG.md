@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FakeBatchTranscriber` (phase-1 placeholder) returns a fixed sentence so the record → transcribe → structure flow can be validated before the native engine lands. DI now wires the batch session; phase 2 swaps the transcriber for a whisper.cpp implementation (one-line change). The Vosk streaming path stays in the module, unwired, for reference.
 - Privacy guard updated: `AudioRecord` is now allowed in both designated capture sessions, and a test asserts every mic-owning file zeroes its PCM buffer.
 
+### Added — Whisper migration phase 2: native whisper.cpp transcriber (spike, `feature/asr-whisper`)
+
+- Vendored `whisper.cpp` (v1.8.5) as a git submodule under `core/asr/src/main/cpp/whisper.cpp`; a `CMakeLists.txt` builds it (+ ggml) via `add_subdirectory` alongside a small JNI bridge (`whisper_jni.cpp`). `:core:asr` gains `externalNativeBuild` (CMake) and an `arm64-v8a` ABI filter for the spike.
+- `WhisperContext` (Kotlin/JNI) + `WhisperBatchTranscriber` load a ggml model, transcribe the captured PCM in one shot, and free the model right after (so its memory isn't held during Gemma structuring). Language is pinned from the dictation language ("it") or "auto". DI swapped from the placeholder to the whisper transcriber.
+- Model: multilingual `ggml-base.bin` loaded from `<files>/whisper/`. Needs on-device build + validation on the Pixel 6a (native build will likely take a round of fixes); quality to be compared against Vosk on real dictation, especially English/code-switching.
+
 ### Decisions
 
 - [ADR 0018](docs/decisions/0018-continuous-streaming-asr-vosk.md) — replace `SpeechRecognizer` with continuous-streaming Vosk (Proposed; supersedes the v2 direction of ADR 0003).

@@ -3,8 +3,8 @@ package com.voicenotemd.core.asr.di
 import android.content.Context
 import com.voicenotemd.core.asr.BatchSpeechToTextSession
 import com.voicenotemd.core.asr.BatchTranscriber
-import com.voicenotemd.core.asr.FakeBatchTranscriber
 import com.voicenotemd.core.asr.SpeechToTextSession
+import com.voicenotemd.core.asr.WhisperBatchTranscriber
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -28,7 +28,9 @@ import dagger.hilt.components.SingletonComponent
 @InstallIn(SingletonComponent::class)
 object AsrModule {
     @Provides
-    fun provideBatchTranscriber(): BatchTranscriber = FakeBatchTranscriber()
+    fun provideBatchTranscriber(
+        @ApplicationContext context: Context,
+    ): BatchTranscriber = WhisperBatchTranscriber(context)
 
     /**
      * Factory-shaped (NOT singleton): each capture session is a fresh recorder + buffer.

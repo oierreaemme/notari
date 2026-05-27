@@ -5,6 +5,21 @@ plugins {
 
 android {
     namespace = "com.voicenotemd.core.asr"
+
+    defaultConfig {
+        ndk {
+            // Spike: build only the Pixel 6a's ABI to keep native build time + APK size down.
+            // Add armeabi-v7a / x86_64 before any release. (ADR 0018 phase 2.)
+            abiFilters += "arm64-v8a"
+        }
+    }
+
+    // Builds whisper.cpp (vendored submodule) + the JNI bridge via CMake.
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
+    }
 }
 
 dependencies {

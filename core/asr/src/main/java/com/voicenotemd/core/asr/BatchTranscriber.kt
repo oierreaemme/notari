@@ -8,12 +8,15 @@ package com.voicenotemd.core.asr
  *
  * @param pcm 16-bit mono PCM samples captured at [sampleRate].
  * @param sampleRate sample rate of [pcm] (16 kHz in our pipeline).
+ * @param languageBcp47 the dictation language ("it", "en", …) to steer the engine, or
+ *   "auto" to let it detect.
  * @return the transcript text.
  */
 interface BatchTranscriber {
     suspend fun transcribe(
         pcm: ShortArray,
         sampleRate: Int,
+        languageBcp47: String,
     ): String
 }
 
@@ -26,6 +29,7 @@ class FakeBatchTranscriber : BatchTranscriber {
     override suspend fun transcribe(
         pcm: ShortArray,
         sampleRate: Int,
+        languageBcp47: String,
     ): String {
         val seconds = if (sampleRate > 0) pcm.size.toDouble() / sampleRate else 0.0
         return "Nota di prova in modalità batch: catturati ${pcm.size} campioni PCM, " +
