@@ -49,30 +49,35 @@ class NoAudioPersistenceTest {
     }
 
     @Test
-    fun `AudioRecord is referenced only in the Vosk session file`() {
-        // Evolved guard (ADR 0018): the Vosk continuous-streaming path owns the mic, so
-        // AudioRecord is now permitted — but ONLY in VoskSpeechToTextSession. The real
-        // invariant (no persistence sink; buffer zeroed) is enforced by the other tests
-        // here. Owning a RAM-only PCM buffer does not violate the cardinal rule or pillar 2.
+    fun `AudioRecord is referenced only in the designated capture session files`() {
+        // Evolved guard (ADR 0018): the on-device capture paths own the mic, so AudioRecord
+        // is permitted — but ONLY in the designated session files. The real invariant (no
+        // persistence sink; buffer zeroed) is enforced by the other tests here. Owning a
+        // RAM-only PCM buffer does not violate the cardinal rule or pillar 2.
         val offenders =
             sourceRoot.walkTopDown()
                 .filter { it.isFile && it.extension == "kt" }
                 .filter { stripComments(it.readText()).contains("AudioRecord") }
                 .map { it.name }
                 .toList()
-        assertThat(offenders).containsExactly("VoskSpeechToTextSession.kt")
+        assertThat(offenders)
+            .containsExactly("VoskSpeechToTextSession.kt", "BatchSpeechToTextSession.kt")
     }
 
     @Test
-    fun `Vosk session overwrites its PCM buffer with zeros on stop`() {
-        // The privacy contract for the owned buffer (ADR 0002 / ADR 0019): the in-RAM PCM
-        // buffer MUST be zeroed before release. Assert the zeroing call is present so it
-        // cannot be silently dropped in a refactor.
-        val session =
+    fun `every capture session that owns the mic zeroes its PCM buffer`() {
+        // The privacy contract for an owned buffer (ADR 0002 / ADR 0019): in-RAM PCM MUST be
+        // overwritten with zeros before release. Assert a zeroing call exists in every file
+        // that touches AudioRecord, so it cannot be silently dropped in a refactor.
+        val captureFiles =
             sourceRoot.walkTopDown()
-                .firstOrNull { it.isFile && it.name == "VoskSpeechToTextSession.kt" }
-                ?: error("VoskSpeechToTextSession.kt not found under $sourceRoot")
-        assertThat(session.readText()).contains("readBuffer.fill(0)")
+                .filter { it.isFile && it.extension == "kt" }
+                .filter { stripComments(it.readText()).contains("AudioRecord") }
+                .toList()
+        assertThat(captureFiles).isNotEmpty()
+        captureFiles.forEach { file ->
+            assertThat(stripComments(file.readText())).contains(".fill(0)")
+        }
     }
 
     private fun assertNoMatch(needle: String) {

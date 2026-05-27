@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RecordingForegroundService` (type `microphone`) keeps capture alive while the screen is off / the app is backgrounded, with an ongoing "recording" notification; the capture screen starts/stops it following the Recording phase. Adds `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`, `POST_NOTIFICATIONS`.
 - Both reuse the existing continuous `AudioRecord` capture and are engine-agnostic — they carry over to the planned whisper path. Needs on-device validation on the Pixel 6a.
 
+### Added — Whisper migration phase 1: batch capture behind the seam (spike, `feature/asr-whisper`)
+
+- `BatchSpeechToTextSession` captures the whole dictation as PCM in RAM and transcribes it once at `stop()` via a `BatchTranscriber` — the shape the (window-based) whisper.cpp engine needs. Reuses the existing continuous `AudioRecord` capture, Bluetooth routing, and RMS waveform. No live transcript during recording (none is useful hands-free); the text arrives after stop. PCM is zeroed immediately after transcription — RAM only, never disk.
+- `FakeBatchTranscriber` (phase-1 placeholder) returns a fixed sentence so the record → transcribe → structure flow can be validated before the native engine lands. DI now wires the batch session; phase 2 swaps the transcriber for a whisper.cpp implementation (one-line change). The Vosk streaming path stays in the module, unwired, for reference.
+- Privacy guard updated: `AudioRecord` is now allowed in both designated capture sessions, and a test asserts every mic-owning file zeroes its PCM buffer.
+
 ### Decisions
 
 - [ADR 0018](docs/decisions/0018-continuous-streaming-asr-vosk.md) — replace `SpeechRecognizer` with continuous-streaming Vosk (Proposed; supersedes the v2 direction of ADR 0003).
