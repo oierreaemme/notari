@@ -37,7 +37,7 @@ import kotlin.math.sqrt
  * separately, as is Bluetooth (in-car) audio routing.
  */
 class VoskSpeechToTextSession(
-    @Suppress("unused") private val context: Context,
+    private val context: Context,
     private val modelProvider: VoskModelProvider,
 ) : SpeechToTextSession {
     private val stopRequested = AtomicBoolean(false)
@@ -60,6 +60,11 @@ class VoskSpeechToTextSession(
                 close()
                 return@callbackFlow
             }
+
+            // Route capture to a Bluetooth headset mic if one is connected (in-car /
+            // hands-free use). Falls back to the phone mic otherwise. See ADR 0018.
+            val btRouter = BluetoothAudioRouter(context)
+            btRouter.routeToBluetoothIfAvailable()
 
             val recognizer = Recognizer(model, SAMPLE_RATE)
             val minBuffer =
@@ -126,6 +131,7 @@ class VoskSpeechToTextSession(
                 runCatching { readerThread.join(THREAD_JOIN_MS) }
                 runCatching { audioRecord.stop() }
                 runCatching { audioRecord.release() }
+                runCatching { btRouter.clear() }
                 // Privacy invariant: overwrite the in-RAM PCM buffer before releasing it.
                 readBuffer.fill(0)
                 runCatching { recognizer.close() }

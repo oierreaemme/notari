@@ -13,7 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FallbackSpeechToTextSession` routes to Vosk when a model is present for the language, and to the `SpeechRecognizer`-backed `AndroidSpeechToTextSession` otherwise, so devices without a model keep working.
 - `FileVoskModelProvider` resolves and caches the per-language model from `filesDir/vosk-models/<bcp47>`; `VoskResultParser` (pure, JVM-unit-tested) extracts the spoken text from Vosk's JSON.
 - Evolved the `:core:asr` privacy guard: `AudioRecord` is now permitted, but only in `VoskSpeechToTextSession`; all audio-persistence sinks stay banned and a new test asserts the PCM buffer is zeroed on stop. The cardinal rule (audio never leaves the device, never written to disk) is unchanged.
-- **Status: spike.** Needs an on-device build + validation on the Pixel 6a (push a model, then test long / in-car / multi-language dictation). Screen-off/background capture (a `microphone` foreground service) and Bluetooth audio routing are tracked as ADR 0018 follow-ups. ADR 0018 stays `Proposed` until validated.
+- **Status: spike.** Needs an on-device build + validation on the Pixel 6a (push a model, then test long / in-car / multi-language dictation). ADR 0018 stays `Proposed` until validated.
+- Fixed a latent capture-screen layout bug exposed by long continuous dictation: the live transcript now sits in a weight-constrained, auto-scrolling area so it never pushes the record/discard controls off-screen.
+
+### Added — Hands-free / in-car capture plumbing (spike)
+
+- `BluetoothAudioRouter` routes capture to a connected Bluetooth headset mic (SCO/HFP) for in-car use, falling back to the phone mic (`MODIFY_AUDIO_SETTINGS` added). Note: BT headset audio is narrowband, which caps accuracy for any ASR engine.
+- `RecordingForegroundService` (type `microphone`) keeps capture alive while the screen is off / the app is backgrounded, with an ongoing "recording" notification; the capture screen starts/stops it following the Recording phase. Adds `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`, `POST_NOTIFICATIONS`.
+- Both reuse the existing continuous `AudioRecord` capture and are engine-agnostic — they carry over to the planned whisper path. Needs on-device validation on the Pixel 6a.
 
 ### Decisions
 

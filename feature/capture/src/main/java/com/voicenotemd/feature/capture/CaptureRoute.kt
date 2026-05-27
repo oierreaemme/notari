@@ -3,6 +3,7 @@ package com.voicenotemd.feature.capture
 import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
+import android.os.Build
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -101,6 +102,13 @@ fun CaptureRoute(
             viewModel.onIntent(CaptureUiIntent.PermissionResult(granted = granted))
         }
 
+    // Best-effort: the foreground-service "recording" notification needs POST_NOTIFICATIONS
+    // on Android 13+. If denied, recording still works — only the visible indicator is missing.
+    val notificationPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { /* best-effort; the foreground service starts regardless */ }
+
     LaunchedEffect(viewModel) {
         viewModel.uiEvents.collect { event ->
             when (event) {
@@ -142,6 +150,26 @@ fun CaptureRoute(
     LifecycleResumeEffect(viewModel) {
         viewModel.warmUpIfNeeded()
         onPauseOrDispose { /* no cleanup needed — warm-up is fire-and-forget */ }
+    }
+
+    // Keep capture alive while the screen is off / the app is backgrounded (hands-free,
+    // in-car use): a microphone foreground service holds the process and background mic
+    // access for the duration of the Recording phase. The service lifecycle tracks the
+    // phase exactly — start on enter, stop on any other phase. See ADR 0018.
+    LaunchedEffect(state.phase) {
+        if (state.phase == CaptureUiState.Phase.Recording) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS,
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            RecordingForegroundService.start(context)
+        } else {
+            RecordingForegroundService.stop(context)
+        }
     }
 
     CaptureScreen(

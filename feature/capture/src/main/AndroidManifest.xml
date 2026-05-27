@@ -1,1 +1,19 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Foreground microphone service: keeps capture alive while the screen is off / the app
+      is backgrounded, the enabler for hands-free / in-car dictation (ADR 0018).
+      FOREGROUND_SERVICE_MICROPHONE is required on Android 14+; POST_NOTIFICATIONS lets the
+      "recording" indicator show on Android 13+ (recording still works if denied).
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application>
+        <service
+            android:name="com.voicenotemd.feature.capture.RecordingForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+    </application>
+</manifest>
