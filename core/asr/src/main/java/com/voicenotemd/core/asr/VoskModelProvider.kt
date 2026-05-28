@@ -71,8 +71,7 @@ class FileVoskModelProvider(
         return candidates.firstOrNull { it.isDirectory && File(it, "am").isDirectory }
     }
 
-    private fun candidateRoots(): List<File> =
-        listOfNotNull(context.getExternalFilesDir(null), context.filesDir)
+    private fun candidateRoots(): List<File> = listOfNotNull(context.getExternalFilesDir(null), context.filesDir)
 
     private companion object {
         const val MODELS_SUBDIR = "vosk-models"
