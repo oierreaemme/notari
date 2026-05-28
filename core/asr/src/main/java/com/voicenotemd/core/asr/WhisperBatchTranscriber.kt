@@ -47,10 +47,15 @@ class WhisperBatchTranscriber(
         }
 
     /**
-     * Picks the best available model on device: prefer `ggml-small.bin` (more accurate on
-     * longer Italian + code-switching), then `ggml-base.bin` (the spike default), then
-     * `ggml-tiny.bin` (fastest). The user just `adb push`es whichever they want and we
-     * pick it up — no rebuild needed.
+     * Picks the best available model on device, preferring quantized variants because the
+     * quality loss vs the f16 originals is sub-percentage and the size win is 2-3×: the
+     * `small-q5_1` ~180 MB ≈ `small` 466 MB in accuracy. Order:
+     *  1. `ggml-small-q5_1.bin`  — best quality/size compromise; recommended default.
+     *  2. `ggml-small.bin`       — f16 small, full size.
+     *  3. `ggml-base-q5_1.bin`   — base quantized.
+     *  4. `ggml-base.bin`        — f16 base.
+     *  5. `ggml-tiny.bin`        — fastest, least accurate.
+     * The user just `adb push`es whichever they want and we pick it up — no rebuild needed.
      */
     private fun resolveModelPath(): String? {
         for (file in MODEL_FILES_BY_PREFERENCE) {
@@ -70,7 +75,14 @@ class WhisperBatchTranscriber(
     private companion object {
         const val TAG = "WhisperBatch"
         const val MODEL_SUBDIR = "whisper"
-        val MODEL_FILES_BY_PREFERENCE = listOf("ggml-small.bin", "ggml-base.bin", "ggml-tiny.bin")
+        val MODEL_FILES_BY_PREFERENCE =
+            listOf(
+                "ggml-small-q5_1.bin",
+                "ggml-small.bin",
+                "ggml-base-q5_1.bin",
+                "ggml-base.bin",
+                "ggml-tiny.bin",
+            )
         const val PCM_FULL_SCALE = 32_768f
     }
 }

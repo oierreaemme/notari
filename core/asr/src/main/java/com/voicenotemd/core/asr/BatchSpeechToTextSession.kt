@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
+import android.os.SystemClock
+import android.util.Log
 import com.voicenotemd.core.common.domain.Language
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
@@ -93,10 +95,31 @@ class BatchSpeechToTextSession(
                 Thread {
                     runCatching {
                         record.startRecording()
+                        val startedAtMs = SystemClock.elapsedRealtime()
+                        Log.i(TAG, "AudioRecord.startRecording() returned, reading…")
+                        var firstReadLogged = false
+                        var firstNonSilentLogged = false
                         while (!stopRequested.get()) {
                             val read = record.read(readBuffer, 0, readBuffer.size)
                             if (read <= 0) continue
-                            _rmsDb.value = rmsDbOf(readBuffer, read)
+                            val rms = rmsDbOf(readBuffer, read)
+                            if (!firstReadLogged) {
+                                Log.i(
+                                    TAG,
+                                    "first PCM chunk (${read} samples) " +
+                                        "at +${SystemClock.elapsedRealtime() - startedAtMs}ms, rmsDb=$rms",
+                                )
+                                firstReadLogged = true
+                            }
+                            if (!firstNonSilentLogged && rms > NON_SILENT_DB_THRESHOLD) {
+                                Log.i(
+                                    TAG,
+                                    "first non-silent PCM " +
+                                        "at +${SystemClock.elapsedRealtime() - startedAtMs}ms, rmsDb=$rms",
+                                )
+                                firstNonSilentLogged = true
+                            }
+                            _rmsDb.value = rms
                             // Copy: the read buffer is reused on the next iteration.
                             synchronized(capturedLock) { captured.add(readBuffer.copyOf(read)) }
                         }
@@ -183,6 +206,15 @@ class BatchSpeechToTextSession(
         const val SAMPLE_RATE = 16_000
         const val FALLBACK_BUFFER_BYTES = 8_192
         const val THREAD_JOIN_MS = 500L
+
+        // Diagnostic: tag used for capture-timing logs (cold-start AGC, BT SCO setup, etc.).
+        const val TAG = "BatchSession"
+
+        // dB-ish threshold above which a PCM frame is treated as "speech-ish" rather than
+        // background noise/silence, just for the first-non-silent-frame diagnostic log. The
+        // UI's rms scale runs ~ -2 (silence) to 12 (loud speech), so 2 is a conservative
+        // "user is clearly talking" floor.
+        const val NON_SILENT_DB_THRESHOLD = 2f
 
         // Waveform RMS mapping (matches VoskSpeechToTextSession; UI expects ~[-2, 12]).
         const val FULL_SCALE = 32_768.0
