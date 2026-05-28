@@ -58,6 +58,13 @@ data class CaptureUiState(
         /** SpeechRecognizer is listening; the partial transcript may be growing. */
         Recording,
 
+        /**
+         * Recording stopped; the batch ASR engine (whisper.cpp) is turning the captured PCM
+         * into text. Distinct from [Structuring] so the UI can honestly show the two steps
+         * — whisper transcribe, then Gemma structure — instead of one long "Structuring…" wait.
+         */
+        Transcribing,
+
         /** Recording stopped, Gemma is converting transcript → structured note. */
         Structuring,
 

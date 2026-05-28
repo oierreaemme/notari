@@ -154,10 +154,13 @@ fun CaptureRoute(
 
     // Keep capture alive while the screen is off / the app is backgrounded (hands-free,
     // in-car use): a microphone foreground service holds the process and background mic
-    // access for the duration of the Recording phase. The service lifecycle tracks the
-    // phase exactly — start on enter, stop on any other phase. See ADR 0018.
+    // access. Stays alive through Recording AND Transcribing — otherwise a screen-off stop
+    // could let the OS kill the process mid-transcription, losing the note. See ADR 0018.
     LaunchedEffect(state.phase) {
-        if (state.phase == CaptureUiState.Phase.Recording) {
+        val captureActive =
+            state.phase == CaptureUiState.Phase.Recording ||
+                state.phase == CaptureUiState.Phase.Transcribing
+        if (captureActive) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                 ContextCompat.checkSelfPermission(
                     context,
@@ -216,6 +219,8 @@ internal fun CaptureScreen(
                     padding = padding,
                     onIntent = onIntent,
                 )
+            CaptureUiState.Phase.Transcribing ->
+                TranscribingPane(padding = padding)
             CaptureUiState.Phase.Structuring ->
                 StructuringPane(
                     padding = padding,
@@ -617,6 +622,36 @@ private fun StructuringPane(
  * Returns a generous fixed value so any downstream consumer that still reads
  * it doesn't crash on division-by-zero or similar.
  */
+@Composable
+private fun TranscribingPane(padding: PaddingValues) {
+    // Shown while whisper.cpp is turning the captured PCM into text (ADR 0018 phase 2).
+    // Deliberately minimal — the meaningful state machine work happens behind the scenes;
+    // this surface is just an honest "we're transcribing, then we'll structure" signal so
+    // the user doesn't think the long Structuring step is what's slow.
+    Column(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(48.dp))
+        Text(
+            text = "Trascrizione…",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 20.dp),
+        )
+        Text(
+            text = "L'audio sta diventando testo. Resta sul telefono.",
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
 private fun estimateStructuringSeconds(transcriptLength: Int): Int =
     (15 + transcriptLength * 0.04).toInt().coerceIn(5, 150)
 

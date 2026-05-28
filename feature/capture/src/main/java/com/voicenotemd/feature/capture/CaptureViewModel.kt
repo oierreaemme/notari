@@ -218,6 +218,7 @@ class CaptureViewModel
                 }
                 CaptureUiState.Phase.Recording -> stopRecordingAndStructure()
                 CaptureUiState.Phase.AwaitingPermission,
+                CaptureUiState.Phase.Transcribing,
                 CaptureUiState.Phase.Structuring,
                 CaptureUiState.Phase.Reviewing,
                 -> Unit // ignore double-taps in those phases
@@ -306,12 +307,11 @@ class CaptureViewModel
 
         private fun stopRecordingAndStructure() {
             if (_uiState.value.phase != CaptureUiState.Phase.Recording) return
-            _uiState.update {
-                it.copy(
-                    phase = CaptureUiState.Phase.Structuring,
-                    structuringStartedAtMs = clock.millis(),
-                )
-            }
+            // Transition: Recording → Transcribing (during whisper batch transcription) →
+            // Structuring (during Gemma). [structure] flips the phase to Structuring as soon
+            // as the transcript is ready; the foreground service stays alive through both
+            // so the process can't be killed mid-transcription with the screen off.
+            _uiState.update { it.copy(phase = CaptureUiState.Phase.Transcribing) }
 
             val transcript = _uiState.value.partialTranscript
             recordingJob?.cancel()

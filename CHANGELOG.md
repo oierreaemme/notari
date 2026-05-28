@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WhisperContext` (Kotlin/JNI) + `WhisperBatchTranscriber` load a ggml model, transcribe the captured PCM in one shot, and free the model right after (so its memory isn't held during Gemma structuring). Language is pinned from the dictation language ("it") or "auto". DI swapped from the placeholder to the whisper transcriber.
 - Model: multilingual `ggml-base.bin` loaded from `<files>/whisper/`. Needs on-device build + validation on the Pixel 6a (native build will likely take a round of fixes); quality to be compared against Vosk on real dictation, especially English/code-switching.
 
+### Improved — Whisper UX and model selection (post-phase-2)
+
+- `WhisperBatchTranscriber` now auto-picks the best available model on device: prefers `ggml-small.bin` (better accuracy on long Italian + code-switching), then falls back to `ggml-base.bin`, then `ggml-tiny.bin`. Push the file you want; the app uses it without a rebuild.
+- New `Phase.Transcribing` UI: while whisper turns PCM into text, the screen shows a dedicated "Trascrizione…" indicator instead of hiding inside "Structuring…". The microphone foreground service stays alive across `Recording` and `Transcribing` so a screen-off stop can't let the OS kill the process mid-transcription.
+- Diagnosis from the first real tests (2026-05-28): Bluetooth headset audio (HFP/SCO, ~8–16 kHz narrowband) caps transcription quality regardless of engine — `phone-mic > Bluetooth` is inherent, not a regression. Phone-mic errors on long readings are the limit of `ggml-base.bin`; the `small` model is the next step up at the cost of ~2-3× transcription time.
+
 ### Decisions
 
 - [ADR 0018](docs/decisions/0018-continuous-streaming-asr-vosk.md) — replace `SpeechRecognizer` with continuous-streaming Vosk (Proposed; supersedes the v2 direction of ADR 0003).

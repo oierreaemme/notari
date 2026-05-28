@@ -46,11 +46,22 @@ class WhisperBatchTranscriber(
             }
         }
 
-    private fun resolveModelPath(): String? =
-        candidateDirs()
-            .map { File(it, MODEL_FILE) }
-            .firstOrNull { it.isFile }
-            ?.absolutePath
+    /**
+     * Picks the best available model on device: prefer `ggml-small.bin` (more accurate on
+     * longer Italian + code-switching), then `ggml-base.bin` (the spike default), then
+     * `ggml-tiny.bin` (fastest). The user just `adb push`es whichever they want and we
+     * pick it up — no rebuild needed.
+     */
+    private fun resolveModelPath(): String? {
+        for (file in MODEL_FILES_BY_PREFERENCE) {
+            val found = candidateDirs().map { File(it, file) }.firstOrNull { it.isFile }
+            if (found != null) {
+                Log.i(TAG, "loaded model: ${found.name}")
+                return found.absolutePath
+            }
+        }
+        return null
+    }
 
     private fun candidateDirs(): List<File> =
         listOfNotNull(context.getExternalFilesDir(null), context.filesDir)
@@ -59,7 +70,7 @@ class WhisperBatchTranscriber(
     private companion object {
         const val TAG = "WhisperBatch"
         const val MODEL_SUBDIR = "whisper"
-        const val MODEL_FILE = "ggml-base.bin"
+        val MODEL_FILES_BY_PREFERENCE = listOf("ggml-small.bin", "ggml-base.bin", "ggml-tiny.bin")
         const val PCM_FULL_SCALE = 32_768f
     }
 }
