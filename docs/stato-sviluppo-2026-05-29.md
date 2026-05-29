@@ -2,7 +2,9 @@
 
 ## Sintesi
 
-La submission v1.0.0 per il Gemma 4 DEV Challenge è stata completata e documentata. Il core funzionale dell'app (cattura vocale → trascrizione → strutturazione con Gemma → salvataggio) è **funzionante end-to-end** sul dispositivo di riferimento (Pixel 6a). I due fronti post-submission sono stati chiusi entrambi in giornata: il motore ASR whisper.cpp ha completato il test BT in-auto e ADR 0018 è ora Accepted; SQLCipher è stato implementato e ADR 0019 è Accepted. Restano follow-up minori (model delivery, ripulitura `catch (_:) {}`, miglioramento accuratezza in-car).
+La submission v1.0.0 per il Gemma 4 DEV Challenge è stata completata e documentata. Il core funzionale dell'app (cattura vocale → trascrizione → strutturazione con Gemma → salvataggio) è **funzionante end-to-end** sul dispositivo di riferimento (Pixel 6a). A fine giornata (2026-05-29) **tutti i fronti post-submission identificati sono chiusi**: ASR whisper.cpp con test BT in-auto (ADR 0018 Accepted), encryption at rest SQLCipher validata on-device incl. migrazione plaintext→encrypted (ADR 0019 Accepted), empty-catch loggati, test passphrase su Keystore reale (androidTest), model delivery deciso GitHub-only/SAF (ADR 0022 Accepted) con onboarding SAF migliorato, e re-strutturazione on-demand delle note nel dettaglio. Restano solo **miglioramenti post-v1** (localizzazione UI, accuratezza in-car, qualità formattazione) e follow-up minori non bloccanti. Tutto il lavoro post-submission vive sul branch `feature/asr-whisper`; `main`/tag `v1.0.0` restano la versione SpeechRecognizer intatta per la challenge.
+
+> **Nota fonte di verità:** questo file è stato consolidato a fine giornata 2026-05-29. Le sezioni sotto riflettono lo stato reale a quel punto.
 
 ---
 
@@ -14,7 +16,7 @@ La submission v1.0.0 per il Gemma 4 DEV Challenge è stata completata e document
 - Hilt per la DI su tutti i layer
 - Detekt + ktlint configurati con CI gate
 - `NoAudioPersistenceTest` e privacy CI gate (`check-no-internet-permission.sh`) attivi
-- 21 ADR documentati in `docs/decisions/`
+- 22 ADR documentati in `docs/decisions/` (fino a ADR 0022); nota di ricerca su constrained decoding in `docs/research/`
 
 ### Inferenza (`:core:inference`)
 - `LiteRtLmGemmaSession` con Gemma 4 E2B INT4 via LiteRT-LM
@@ -30,8 +32,8 @@ La submission v1.0.0 per il Gemma 4 DEV Challenge è stata completata e document
 ### ASR (`:core:asr`)
 - `SpeechToTextSession` interface con seam reale (`FakeSpeechToTextSession`)
 - `BatchSpeechToTextSession`: cattura PCM continua con `AudioRecord` in RAM, batch transcribe a fine registrazione
-- `WhisperBatchTranscriber` / `WhisperContext`: whisper.cpp via JNI, modello `ggml-base.bin`, `-O3` forzato nel CMakeLists
-- Auto-selezione del miglior modello whisper disponibile
+- `WhisperBatchTranscriber` / `WhisperContext`: whisper.cpp via JNI, `-O3` forzato nel CMakeLists
+- Auto-selezione del miglior modello whisper disponibile (preferenza: file importato via SAF → `ggml-small-q5_1.bin` → … → `ggml-tiny.bin`); path canonico condiviso in `WhisperModelLocation`
 - `BluetoothAudioRouter`: routing verso microfono BT (scenario in-auto)
 - `RecordingForegroundService` per cattura con schermo spento
 - `FallbackSpeechToTextSession`: `AndroidSpeechToTextSession` come fallback (ADR 0003)
@@ -39,11 +41,11 @@ La submission v1.0.0 per il Gemma 4 DEV Challenge è stata completata e document
 - Validato su Pixel 6a con `ggml-base.bin` (2026-05-27): italiano fedele, brand/jargon inglese corretto
 
 ### Feature
-- **`:feature:capture`**: waveform live, fasi Idle / Preparazione / Recording / Transcribing / Structuring, discard senza salvare
+- **`:feature:capture`**: waveform live, fasi Idle / Preparazione / Recording / Transcribing / Structuring, discard senza salvare; **banner "Set up"** quando manca un modello (ADR 0022)
 - **`:feature:notes`**: lista note con timestamp relativo, ricerca, tag filter
-- **`:feature:notedetail`**: rendering Markdown, sezione Mentions con datetime risolte
-- **`:feature:settings`**: language pin, biometric lock toggle, privacy section
-- **`:feature:onboarding`**: import modello via SAF (ADR 0008)
+- **`:feature:notedetail`**: rendering Markdown, sezione Mentions con datetime risolte; **"Struttura con AI"** — retry on-demand della strutturazione su note rimaste plain-text (banner + azione ✨ in topbar)
+- **`:feature:settings`**: language pin, biometric lock toggle, privacy section; **import SAF di entrambi i modelli** (Gemma + whisper) con validazione (nome/dimensione) ed errori chiari (ADR 0022)
+- **`:feature:onboarding`**: 3 slide informative (l'import modello vive in Settings, ADR 0008)
 
 ### Sicurezza e privacy
 - Biometric launch lock opzionale (ADR 0013)
@@ -57,7 +59,7 @@ La submission v1.0.0 per il Gemma 4 DEV Challenge è stata completata e document
 ### Database (`:core:database`)
 - Room con entità `NoteEntity`, `TagEntity`, `MentionEntity`
 - `NoteRepositoryImpl` con DAOs e mapper
-- **Cifratura at rest attiva** (ADR 0019 Accepted): SQLCipher via `SupportOpenHelperFactory`, passphrase 32 byte random wrapped con chiave AES-256-GCM hardware-backed (StrongBox preferito, fallback TEE), persistita in `<filesDir>/db_passphrase.enc`. Migrazione one-shot `voice_note.db` plaintext → encrypted via `sqlcipher_export()` (crash-safe). Test TDD su `DatabasePassphraseProvider` (Robolectric).
+- **Cifratura at rest attiva** (ADR 0019 Accepted): SQLCipher via `SupportOpenHelperFactory`, passphrase 32 byte random (passata come stringa base64 a tutti i call-site per coerenza della chiave) wrapped con chiave AES-256-GCM hardware-backed (StrongBox preferito, fallback TEE), persistita in `<filesDir>/db_passphrase.enc`. Migrazione one-shot `voice_note.db` plaintext → encrypted via `sqlcipher_export()` (crash-safe, detection su magic-byte). **Validata on-device** (fresh install + reboot + migrazione con note reali). Test `DatabasePassphraseProvider` in `androidTest/` (Keystore reale, 5/5 sul Pixel 6a).
 
 ### Docs e submission
 - `docs/dev-post-submission.md`: post DEV finalizzato e pubblicato
@@ -77,28 +79,30 @@ _(Nessuna voce critica aperta — i fronti ASR whisper e DB encryption sono chiu
 
 | Area | Esito | Riferimento |
 |------|-------|-------------|
-| **Encryption at rest** | Implementato. SQLCipher + chiave AES Keystore device-bound + migrazione one-shot crash-safe + test TDD. ADR flippato ad Accepted. | ADR 0019 Accepted |
-| **ASR whisper in-auto con BT** | Test reale completato sul Pixel 6a (interno mic + HFP BT); accuracy trade-off del codec BT documentato; ADR flippato ad Accepted. | ADR 0018 amendment 2026-05-29 |
-| **Diagnostic log cleanup** | _Superato_ da ADR 0021: i log restano nel sorgente, R8 li strippa solo in release via `-assumenosideeffects`. | ADR 0021 |
-| **Release ABI restore** | Verificato: `abiFilters` (arm64-v8a, armeabi-v7a, x86_64) è in `defaultConfig`, nessun override release. Nessuna riduzione. | `core/asr/build.gradle.kts:24` |
-| **`NoAudioPersistenceTest` whisper** | Esteso: guard statico sul bridge JNI (`whisper_jni.cpp`) per `fopen`/`fwrite`/`ofstream`/`freopen`. Vendored `whisper.cpp/` escluso (non linkato nel runtime target). | ADR 0018 follow-up |
-| **Empty catch blocks** | Risolto: i 5 `catch (_: Exception) {}` di `AndroidSpeechToTextSession` ora loggano via `Log.w` (tag `AsrFallback`, sopravvive a R8 in release). | ADR 0019 follow-up |
+| **Encryption at rest** | SQLCipher + chiave AES Keystore device-bound + migrazione one-shot crash-safe. Validata on-device (fresh install + reboot). ADR Accepted. | ADR 0019 |
+| **Migrazione plaintext→encrypted** | Validata sul Pixel 6a con un `voice_note.db` pre-0019 seedato (DDL Room + identity hash + note/tag/mention reali): migra e Room apre il DB cifrato; note leggibili nella UI. | ADR 0019 |
+| **Bug chiave-zero** | Trovato/fixato: `SupportOpenHelperFactory` tiene il byte[] per riferimento (lazy) → non va azzerato; passphrase normalizzata a stringa base64 su tutti i call-site. | ADR 0019 |
+| **ASR whisper in-auto con BT** | Test reale (interno mic + HFP BT); accuracy trade-off del codec BT documentato; ADR Accepted. | ADR 0018 |
+| **Diagnostic log cleanup** | _Superato_ da ADR 0021: i log restano nel sorgente, R8 li strippa in release via `-assumenosideeffects`. | ADR 0021 |
+| **Release ABI** | Verificato: `abiFilters` (arm64-v8a, armeabi-v7a, x86_64) in `defaultConfig`, nessun override release. | `core/asr/build.gradle.kts` |
+| **`NoAudioPersistenceTest` whisper** | Esteso al bridge JNI (`whisper_jni.cpp`): guard su `fopen`/`fwrite`/`ofstream`/`freopen`. Vendored `whisper.cpp/` escluso. | ADR 0018 follow-up |
+| **Empty catch blocks** | I 5 `catch (_: Exception) {}` di `AndroidSpeechToTextSession` ora loggano via `Log.w` (tag `AsrFallback`). | ADR 0019 follow-up |
+| **Test passphrase su Keystore reale** | `DatabasePassphraseProviderTest` spostato in `androidTest/` (era `@Ignore`'d sotto Robolectric, niente shadow AndroidKeyStore); 5/5 sul Pixel 6a. | ADR 0019 follow-up |
+| **Model delivery** | **Deciso (ADR 0022 Accepted): solo GitHub + import SAF.** Play/PAD rimandato (reversibile). Con SAF non si ridistribuiscono i pesi → licenza Gemma e sizing PAD diventano non-problemi. Findings (Gemma 4 ≈ Apache 2.0; PAD pack 512 MB/totale 2 GB) archiviati nell'ADR. | ADR 0022 |
+| **Onboarding SAF** | Import whisper via SAF (prima solo adb push), validazione import (nome/dimensione) con errori chiari, copy+link in Settings, banner "Set up" in cattura. | ADR 0022 |
+| **Re-strutturazione on-demand** | "Struttura con AI" nel dettaglio nota: retry della strutturazione su note rimaste plain-text, senza perdere il testo. | ADR 0005 / ADR 0022 follow-up |
+| **Indagine constrained decoding** | `litertlm 0.11.0` espone `ExperimentalFlags.enableConversationConstrainedDecoding`, ma legato al path tool-calling (OpenApiTool): adozione = re-architettura di `:core:inference`. Promettente, non urgente. | `docs/research/constrained-decoding-investigation.md` |
 
-### 🟡 Importante — roadmap immediata
-
-| Area | Descrizione | Riferimento |
-|------|-------------|-------------|
-| **Model delivery** | **Deciso (ADR 0022 Accepted): distribuzione solo via GitHub con import SAF.** Niente Play/PAD per ora (rimandato, reversibile). Con SAF non si ridistribuiscono i pesi → licenza Gemma e sizing PAD diventano non-problemi. **Onboarding SAF migliorato (2026-05-29):** import whisper via SAF (prima solo adb push), validazione import con errori chiari, copy+link in Settings, e banner "Set up" sulla schermata di cattura quando un modello manca. | ADR 0022 Accepted |
-
-### 🟢 Miglioramenti noti (post-v1)
+### 🟢 Miglioramenti noti (post-v1, mai iniziati)
 
 | Area | Descrizione |
 |------|-------------|
-| **Localizzazione UI** | L'app è solo in inglese; le note sono nella lingua del dettato. |
-| **Gemma function calling** | Investigazione aperta: se MediaPipe Android lo espone, sostituisce il prompt engineering per la strutturazione (ADR 0015 intent). |
-| **whisper accuracy** | "synth" → "sint" osservato; possibile fine-tuning o upgrade a `ggml-small`. |
-| **In-car VAD** | Voiceactivity detection per ridurre rumore in auto prima di passare il PCM a whisper. |
-| **Gemma audio-native (v3)** | Ancora nel backlog come path a lungo termine; non rilevante ora. |
+| **Localizzazione UI** | L'app è solo in inglese, **con stringhe italiane hardcoded** ("Preparazione…", "Trascrizione…", "Silent Mic", "Process with AI") → incoerente. Lavoro: estrarre tutte le stringhe in `strings.xml` (oggi nei Composable) + tradurre nelle lingue v1. Le note restano nella lingua del dettato. |
+| **Qualità formattazione** | Leve in ordine di costo: (1) **few-shot nel prompt** (economico, nessun training); (2) **constrained decoding** (vedi indagine — risolve solo i fallback da JSON malformato, non i timeout); (3) **LoRA** — scartato per ora: richiede backend GPU, ma il Pixel 6a gira su CPU. |
+| **whisper accuracy** | Degrado su codec Bluetooth HFP (documentato in ADR 0018); possibile pre-processing/noise-reduction sul PCM o upgrade `ggml-medium` (RAM/tempo permettendo). |
+| **Gemma function calling** | Se l'API lo espone bene, alternativa al prompt engineering per la strutturazione (intersect con constrained decoding / ADR 0015 intent). |
+| **In-car VAD** | Voice-activity detection per ridurre rumore in auto prima di passare il PCM a whisper. |
+| **Gemma audio-native (v3)** | Path a lungo termine, backlog; non rilevante ora. |
 
 ---
 
@@ -115,8 +119,11 @@ _(Nessuna voce critica aperta — i fronti ASR whisper e DB encryption sono chiu
 
 ## Prossimi passi consigliati (in ordine di priorità)
 
-1. ~~**Smoke test on-device di ADR 0019**~~ → ✅ **fatto (2026-05-29)**: due note dettate, leggibili dopo process-kill e dopo reboot del telefono; la chiave Keystore hardware-backed sopravvive al cold boot. Encryption at rest confermata end-to-end sul Pixel 6a.
-2. **Test migrazione upgrade da DB plaintext** → lo smoke sopra copre il fresh-install path; resta da validare su un device con un `voice_note.db` pre-0019 reale (oppure `adb push` di un DB plaintext) che il `sqlcipher_export()` preservi le note esistenti
-3. **Decidi model delivery** (whisper + Gemma: bundle? PAD? SAF-only?) → sblocca la distribuzione
-4. **Fix empty catch blocks** in `AndroidSpeechToTextSession` → cleanup richiesto dalla review esterna (ADR 0019 follow-up)
-5. **Migliorie accuracy in-car** (post-v1) → pre-processing noise reduction sul PCM prima di whisper; eventuale upgrade `ggml-medium` se RAM/tempo lo consentono
+Tutti i fronti bloccanti sono chiusi. I prossimi passi sono miglioramenti/igiene, non urgenti:
+
+1. **Localizzazione UI** → estrarre le stringhe hardcoded (incl. quelle italiane) in `strings.xml` e tradurre nelle 6 lingue v1; sistemare l'incoerenza EN/IT attuale.
+2. **Qualità formattazione — few-shot nel prompt** → la leva più economica (1-2 esempi trascritto→JSON ideale nel prompt), nessun training né rete.
+3. **Merge `feature/asr-whisper` → `main`** quando la challenge lo consente (dopo il 4 giugno): il branch contiene whisper, encryption, onboarding SAF, re-strutturazione. `main` oggi è volutamente intatto (SpeechRecognizer) per la valutazione.
+4. **Release build firmata** → verificare se l'avviso "app compatibility" della ROM (sideload/debug) sparisce; preparare l'artefatto di distribuzione GitHub.
+5. **Constrained decoding (spike)** → solo se la qualità JSON lo richiede; prototipo dietro flag + misura su Pixel 6a (vedi `docs/research/`). Meriterebbe un ADR proprio.
+6. **whisper accuracy in-car** (post-v1) → pre-processing/noise-reduction sul PCM; eventuale `ggml-medium` se RAM/tempo lo consentono.
