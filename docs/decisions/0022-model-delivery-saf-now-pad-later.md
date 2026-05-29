@@ -149,6 +149,26 @@ because their licences differ.
    whisper (~180 MB) ≈ 1.4 GB fits under that. Feasible, but real work — only
    relevant if Play is adopted.
 
+## Implementation — 2026-05-29 (SAF friction reduction)
+
+Since SAF is the chosen path, the friction was reduced rather than the
+mechanism replaced:
+
+- **Whisper import via SAF.** Previously the whisper model could only be
+  `adb push`ed; Settings now has a second import row for it, symmetric with
+  Gemma. The generic `FileBasedOnDeviceModelRepository` is reused via a
+  `@WhisperModel`-qualified binding, writing to the shared
+  `WhisperModelLocation` the transcriber reads from.
+- **Validated imports.** `importFrom` now takes the SAF display name + size
+  and a per-model `ModelValidationSpec`, so a wrong pick fails with a clear
+  message instead of "succeeding" and then breaking at inference time
+  (Gemma: `.litertlm` ≥ 200 MB; whisper: `*.bin` ≥ 10 MB).
+- **Clear copy + links.** Each Settings row names the expected file and where
+  to download it (Google AI for Gemma, ggerganov for whisper).
+- **Setup nudge.** The idle capture screen shows a banner with a "Set up"
+  button to Settings when a model is missing (whisper missing = blocking;
+  Gemma missing = advisory plain-text).
+
 ## Links
 
 - ADR 0007 — Strip transitive network permissions (the no-`INTERNET` gate).

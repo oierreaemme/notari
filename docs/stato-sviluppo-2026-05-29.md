@@ -88,7 +88,7 @@ _(Nessuna voce critica aperta — i fronti ASR whisper e DB encryption sono chiu
 
 | Area | Descrizione | Riferimento |
 |------|-------------|-------------|
-| **Model delivery** | **Deciso (ADR 0022 Accepted): distribuzione solo via GitHub con import SAF.** Niente Play/PAD per ora (rimandato, reversibile). Con SAF non si ridistribuiscono i pesi → licenza Gemma e sizing PAD diventano non-problemi. Resta da migliorare l'onboarding SAF per ridurre la frizione. | ADR 0022 Accepted |
+| **Model delivery** | **Deciso (ADR 0022 Accepted): distribuzione solo via GitHub con import SAF.** Niente Play/PAD per ora (rimandato, reversibile). Con SAF non si ridistribuiscono i pesi → licenza Gemma e sizing PAD diventano non-problemi. **Onboarding SAF migliorato (2026-05-29):** import whisper via SAF (prima solo adb push), validazione import con errori chiari, copy+link in Settings, e banner "Set up" sulla schermata di cattura quando un modello manca. | ADR 0022 Accepted |
 
 ### 🟢 Miglioramenti noti (post-v1)
 
