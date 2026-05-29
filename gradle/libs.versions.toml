@@ -54,6 +54,10 @@ vosk = "0.3.47"
 # See ADR 0019. Verify latest on https://search.maven.org/artifact/net.zetetic/sqlcipher-android
 sqlcipher = "4.5.6"
 
+# DI annotations (JSR-330) — used in :core:common to declare cross-module @Qualifiers
+# (e.g. Gemma vs whisper model repositories) without pulling Hilt into common.
+javaxInject = "1"
+
 # JSON
 moshi = "1.15.1"
 
@@ -135,6 +139,9 @@ markwon-ext-tasklist = { group = "io.noties.markwon", name = "ext-tasklist", ver
 
 # SQLCipher — encrypted Room database (ADR 0019)
 sqlcipher-android = { group = "net.zetetic", name = "sqlcipher-android", version.ref = "sqlcipher" }
+
+# DI annotations (JSR-330)
+javax-inject = { group = "javax.inject", name = "javax.inject", version.ref = "javaxInject" }
 
 # JSON parsing for Gemma output
 moshi = { group = "com.squareup.moshi", name = "moshi", version.ref = "moshi" }

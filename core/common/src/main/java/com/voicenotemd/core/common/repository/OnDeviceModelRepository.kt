@@ -19,12 +19,28 @@ interface OnDeviceModelRepository {
      * replacing any prior file. The caller is responsible for closing [source].
      *
      * Streamed so we never hold the full ~1.5 GB blob in memory.
+     *
+     * [candidate] carries the SAF-provided display name and declared size (both may be
+     * `null` if the provider doesn't expose them). The implementation validates them
+     * against the expected model so the user gets a clear error ("this file is too small
+     * to be the Gemma model") instead of a successful import that then fails cryptically
+     * at inference time.
      */
-    suspend fun importFrom(source: InputStream): ImportResult
+    suspend fun importFrom(source: InputStream, candidate: ModelImportCandidate): ImportResult
 
     /** Permanently delete the on-device model. After this returns, status is `Missing`. */
     suspend fun delete()
 }
+
+/**
+ * Metadata about the document the user picked, captured from the SAF result before the
+ * bytes are streamed. Used for friendly pre-copy validation. Both fields are best-effort:
+ * not every document provider reports a name or size.
+ */
+data class ModelImportCandidate(
+    val displayName: String?,
+    val declaredSizeBytes: Long?,
+)
 
 enum class OnDeviceModelStatus {
     /** No model file has been imported yet — the app falls back to plain-text capture. */

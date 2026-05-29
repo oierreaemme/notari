@@ -1,15 +1,19 @@
 package com.voicenotemd.app.di
 
 import android.content.Context
+import com.voicenotemd.core.asr.WhisperModelLocation
 import com.voicenotemd.core.common.di.defaultAppDispatchers
 import com.voicenotemd.core.common.dispatchers.AppDispatchers
 import com.voicenotemd.core.common.domain.Note
+import com.voicenotemd.core.common.repository.GemmaModel
 import com.voicenotemd.core.common.repository.NoteRepository
 import com.voicenotemd.core.common.repository.OnDeviceModelRepository
+import com.voicenotemd.core.common.repository.WhisperModel
 import com.voicenotemd.core.common.usecase.SaveNoteUseCase
 import com.voicenotemd.core.inference.session.FileBasedOnDeviceModelRepository
 import com.voicenotemd.core.inference.session.ImportTargetSelector
 import com.voicenotemd.core.inference.session.ModelFileProvider
+import com.voicenotemd.core.inference.session.ModelValidationSpec
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -82,7 +86,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideOnDeviceModelRepository(
+    @GemmaModel
+    fun provideGemmaModelRepository(
         modelFileProvider: ModelFileProvider,
         importTargetSelector: ImportTargetSelector,
         dispatchers: AppDispatchers,
@@ -91,6 +96,71 @@ object AppModule {
             modelFileProvider = modelFileProvider,
             targetSelector = importTargetSelector,
             dispatchers = dispatchers,
+            validation = GEMMA_VALIDATION,
+        )
+
+    /**
+     * The whisper.cpp transcription model. Shares the generic
+     * [FileBasedOnDeviceModelRepository] with Gemma; only the location and validation
+     * differ. The provider/target are built inline (not separate @Provides) so they never
+     * collide with the Gemma [ModelFileProvider]/[ImportTargetSelector] bindings. Paths come
+     * from [WhisperModelLocation] — the same constants the transcriber reads from. ADR 0022.
+     */
+    @Provides
+    @Singleton
+    @WhisperModel
+    fun provideWhisperModelRepository(
+        @ApplicationContext context: Context,
+        dispatchers: AppDispatchers,
+    ): OnDeviceModelRepository {
+        val internalDir = File(context.filesDir, WhisperModelLocation.SUBDIR)
+        val externalDir = File(context.getExternalFilesDir(null), WhisperModelLocation.SUBDIR)
+        val provider =
+            object : ModelFileProvider {
+                // Present if either whisper dir holds a non-empty *.bin (a SAF import or an
+                // adb-pushed dev model). Mirrors WhisperBatchTranscriber's resolution intent.
+                private fun anyModel(): File? =
+                    listOf(internalDir, externalDir)
+                        .flatMap { it.listFiles()?.toList().orEmpty() }
+                        .firstOrNull { it.isFile && it.length() > 0L && it.name.endsWith(".bin", true) }
+
+                override fun isAvailable(): Boolean = anyModel() != null
+
+                override fun fileOrNull(): File? = anyModel()
+            }
+        val target = ImportTargetSelector { File(internalDir, WhisperModelLocation.IMPORTED_FILE_NAME) }
+        return FileBasedOnDeviceModelRepository(
+            modelFileProvider = provider,
+            targetSelector = target,
+            dispatchers = dispatchers,
+            validation = WHISPER_VALIDATION,
+        )
+    }
+
+    /**
+     * Gemma 4 E2B INT4 is well over 1 GB; 200 MB is a safe floor that rejects any
+     * wrong/smaller pick while leaving headroom for future quantizations. The file the
+     * user downloads from Google AI ends in `.litertlm`.
+     */
+    private val GEMMA_VALIDATION =
+        ModelValidationSpec(
+            label = "the Gemma model",
+            expectedHint = ".litertlm file",
+            minBytes = 200_000_000,
+            nameMatches = { it.endsWith(".litertlm", ignoreCase = true) },
+        )
+
+    /**
+     * whisper ggml models range from ~30 MB (tiny, quantized) to ~500 MB (small, f16); a
+     * 10 MB floor rejects obviously-wrong picks without excluding the smallest real model.
+     * The ggerganov releases are named `ggml-*.bin`.
+     */
+    private val WHISPER_VALIDATION =
+        ModelValidationSpec(
+            label = "a whisper model",
+            expectedHint = "ggml-*.bin file",
+            minBytes = 10_000_000,
+            nameMatches = { it.endsWith(".bin", ignoreCase = true) },
         )
 
     @Provides

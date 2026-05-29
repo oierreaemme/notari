@@ -46,7 +46,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.OpenableColumns
 import com.voicenotemd.core.common.domain.Language
+import com.voicenotemd.core.common.repository.ModelImportCandidate
 import com.voicenotemd.core.common.repository.OnDeviceModelStatus
 
 @Composable
@@ -58,15 +62,24 @@ fun SettingsRoute(
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
 
-    val pickModelLauncher =
-        rememberLauncherForActivityResult(
-            // OpenDocument lets the user pick from any provider (Downloads, Drive, etc.) and
-            // hands us a content:// Uri with persistable read access — perfect for streaming
-            // a one-shot import without holding a permanent grant.
-            contract = ActivityResultContracts.OpenDocument(),
-        ) { uri ->
+    // One SAF launcher per model. OpenDocument lets the user pick from any provider
+    // (Downloads, Drive, etc.) and hands us a content:// Uri with read access — perfect for
+    // streaming a one-shot import. We read the display name + size up front so the VM/repo
+    // can validate the pick before streaming a multi-GB file; the Android Uri never leaves
+    // the Composable layer.
+    val pickGemmaLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
-            viewModel.importModelFromStream {
+            val candidate = context.contentResolver.modelImportCandidate(uri)
+            viewModel.importModelFromStream(ManagedModel.Gemma, candidate) {
+                context.contentResolver.openInputStream(uri)
+            }
+        }
+    val pickWhisperLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            val candidate = context.contentResolver.modelImportCandidate(uri)
+            viewModel.importModelFromStream(ManagedModel.Whisper, candidate) {
                 context.contentResolver.openInputStream(uri)
             }
         }
@@ -88,10 +101,15 @@ fun SettingsRoute(
             viewModel.onIntent(SettingsUiIntent.AcknowledgeDeletion)
         }
     }
-    LaunchedEffect(state.lastImportError) {
-        val err = state.lastImportError ?: return@LaunchedEffect
-        snackbar.showSnackbar("Couldn't import the model: $err")
-        viewModel.onIntent(SettingsUiIntent.DismissImportError)
+    LaunchedEffect(state.gemma.lastImportError) {
+        val err = state.gemma.lastImportError ?: return@LaunchedEffect
+        snackbar.showSnackbar(err)
+        viewModel.onIntent(SettingsUiIntent.DismissImportError(ManagedModel.Gemma))
+    }
+    LaunchedEffect(state.whisper.lastImportError) {
+        val err = state.whisper.lastImportError ?: return@LaunchedEffect
+        snackbar.showSnackbar(err)
+        viewModel.onIntent(SettingsUiIntent.DismissImportError(ManagedModel.Whisper))
     }
 
     SettingsScreen(
@@ -99,12 +117,34 @@ fun SettingsRoute(
         snackbarHost = snackbar,
         onBack = onBack,
         onIntent = viewModel::onIntent,
-        onPickModel = {
-            // The .litertlm extension does not have a registered MIME — pass octet-stream
-            // and let the user filter by name. Some providers honour the */* fallback.
-            pickModelLauncher.launch(arrayOf("application/octet-stream", "*/*"))
-        },
+        // Neither .litertlm nor ggml .bin has a registered MIME — pass octet-stream and
+        // */* so providers show the file; the user filters by name.
+        onPickGemma = { pickGemmaLauncher.launch(arrayOf("application/octet-stream", "*/*")) },
+        onPickWhisper = { pickWhisperLauncher.launch(arrayOf("application/octet-stream", "*/*")) },
     )
+}
+
+/**
+ * Best-effort read of the SAF document's display name and size via [OpenableColumns].
+ * Either field may come back `null` (not all providers report them); the repository's
+ * validation treats missing metadata as "proceed". Stays in the presentation layer so the
+ * Android `Uri`/`ContentResolver` never leak into the ViewModel.
+ */
+private fun ContentResolver.modelImportCandidate(uri: Uri): ModelImportCandidate {
+    var name: String? = null
+    var size: Long? = null
+    runCatching {
+        query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
+            ?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    val sizeIdx = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (nameIdx >= 0 && !cursor.isNull(nameIdx)) name = cursor.getString(nameIdx)
+                    if (sizeIdx >= 0 && !cursor.isNull(sizeIdx)) size = cursor.getLong(sizeIdx)
+                }
+            }
+    }
+    return ModelImportCandidate(displayName = name, declaredSizeBytes = size)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -114,7 +154,8 @@ internal fun SettingsScreen(
     snackbarHost: SnackbarHostState,
     onBack: () -> Unit,
     onIntent: (SettingsUiIntent) -> Unit,
-    onPickModel: () -> Unit = {},
+    onPickGemma: () -> Unit = {},
+    onPickWhisper: () -> Unit = {},
 ) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHost) },
@@ -133,7 +174,8 @@ internal fun SettingsScreen(
             padding = padding,
             state = state,
             onIntent = onIntent,
-            onPickModel = onPickModel,
+            onPickGemma = onPickGemma,
+            onPickWhisper = onPickWhisper,
         )
     }
 
@@ -166,7 +208,8 @@ private fun SettingsContent(
     padding: PaddingValues,
     state: SettingsUiState,
     onIntent: (SettingsUiIntent) -> Unit,
-    onPickModel: () -> Unit,
+    onPickGemma: () -> Unit,
+    onPickWhisper: () -> Unit,
 ) {
     Column(
         modifier =
@@ -177,12 +220,34 @@ private fun SettingsContent(
                 .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        OnDeviceModelSection(
-            status = state.modelStatus,
-            isImporting = state.isImportingModel,
-            onPickModel = onPickModel,
-            onDeleteModel = { onIntent(SettingsUiIntent.DeleteModel) },
-        )
+        Section(title = "On-device models") {
+            Text(
+                "Both models run entirely on your device — no network, ever. Import each " +
+                    "file you downloaded; we copy it into private storage.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OnDeviceModelRow(
+                title = "Gemma (note structuring)",
+                description =
+                    "Gemma 4 E2B, ~1.5 GB, a .litertlm file. Without it, notes are saved " +
+                        "as plain text. Download it from Google AI (ai.google.dev/gemma).",
+                section = state.gemma,
+                importLabel = "Import .litertlm",
+                onPickModel = onPickGemma,
+                onDeleteModel = { onIntent(SettingsUiIntent.DeleteModel(ManagedModel.Gemma)) },
+            )
+            OnDeviceModelRow(
+                title = "Whisper (transcription)",
+                description =
+                    "A whisper.cpp ggml-*.bin model (e.g. ggml-small-q5_1.bin, ~180 MB). " +
+                        "Without it, dictation can't be transcribed. Download from " +
+                        "huggingface.co/ggerganov/whisper.cpp.",
+                section = state.whisper,
+                importLabel = "Import ggml .bin",
+                onPickModel = onPickWhisper,
+                onDeleteModel = { onIntent(SettingsUiIntent.DeleteModel(ManagedModel.Whisper)) },
+            )
+        }
 
         Section(title = "Security") {
             Row(
@@ -329,89 +394,69 @@ private fun LanguagePicker(
     }
 }
 
+/**
+ * One model's import row inside the "On-device models" section. Symmetric for Gemma and
+ * whisper — status dot + label, a short description, and Import/Replace/Remove controls.
+ */
 @Composable
-private fun OnDeviceModelSection(
-    status: OnDeviceModelStatus,
-    isImporting: Boolean,
+private fun OnDeviceModelRow(
+    title: String,
+    description: String,
+    section: ModelSectionState,
+    importLabel: String,
     onPickModel: () -> Unit,
     onDeleteModel: () -> Unit,
 ) {
-    Section(title = "On-device model") {
-        val (statusLabel, statusColor) =
-            when (status) {
-                OnDeviceModelStatus.Present ->
-                    "Ready" to MaterialTheme.colorScheme.primary
-                OnDeviceModelStatus.Missing ->
-                    "Not imported — notes are saved as plain text" to
-                        MaterialTheme.colorScheme.error
-            }
+    val present = section.status == OnDeviceModelStatus.Present
+    val (statusLabel, statusColor) =
+        if (present) {
+            "Ready" to MaterialTheme.colorScheme.primary
+        } else {
+            "Not imported" to MaterialTheme.colorScheme.error
+        }
+    Column(modifier = Modifier.padding(top = 16.dp)) {
+        Text(text = title, style = MaterialTheme.typography.titleSmall)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.padding(top = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Box(
-                modifier =
-                    Modifier
-                        .padding(end = 4.dp)
-                        .let { mod ->
-                            // simple status dot
-                            mod
-                        },
-            ) {
-                Surface(
-                    color = statusColor,
-                    shape = RoundedCornerShape(50),
-                    modifier = Modifier.padding(end = 4.dp),
-                ) {
-                    Box(modifier = Modifier.padding(6.dp)) {}
-                }
+            Surface(color = statusColor, shape = RoundedCornerShape(50)) {
+                Box(modifier = Modifier.padding(5.dp)) {}
             }
-            Text(
-                text = statusLabel,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            Text(text = statusLabel, style = MaterialTheme.typography.bodyMedium)
         }
         Text(
-            text =
-                "The Gemma 4 E2B model (~1.5 GB, .litertlm) lives entirely on your " +
-                    "device. Pick the file you downloaded from Google AI — we copy it into " +
-                    "private storage and never touch the network.",
-            modifier = Modifier.padding(top = 8.dp),
+            text = description,
+            modifier = Modifier.padding(top = 6.dp),
             style = MaterialTheme.typography.bodySmall,
         )
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(top = 12.dp),
+                    .padding(top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Button(
                 onClick = onPickModel,
-                enabled = !isImporting,
+                enabled = !section.isImporting,
                 modifier = Modifier.weight(1f),
             ) {
-                if (isImporting) {
+                if (section.isImporting) {
                     CircularProgressIndicator(
                         modifier = Modifier.padding(end = 8.dp),
                         strokeWidth = 2.dp,
                     )
                     Text("Importing…")
                 } else {
-                    Text(
-                        if (status == OnDeviceModelStatus.Present) {
-                            "Replace model"
-                        } else {
-                            "Import .litertlm"
-                        },
-                    )
+                    Text(if (present) "Replace" else importLabel)
                 }
             }
-            if (status == OnDeviceModelStatus.Present) {
+            if (present) {
                 OutlinedButton(
                     onClick = onDeleteModel,
-                    enabled = !isImporting,
+                    enabled = !section.isImporting,
                 ) { Text("Remove") }
             }
         }

@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import com.voicenotemd.core.common.dispatchers.AppDispatchers
 import com.voicenotemd.core.common.repository.ImportResult
+import com.voicenotemd.core.common.repository.ModelImportCandidate
 import com.voicenotemd.core.common.repository.OnDeviceModelStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -62,7 +63,7 @@ class FileBasedOnDeviceModelRepositoryTest {
             val repo = newRepo()
             val payload = ByteArray(1_024) { (it % 256).toByte() }
 
-            val result = repo.importFrom(ByteArrayInputStream(payload))
+            val result = repo.importFrom(ByteArrayInputStream(payload), anyCandidate)
 
             assertThat(result).isInstanceOf(ImportResult.Success::class.java)
             assertThat(targetFile.exists()).isTrue()
@@ -90,7 +91,7 @@ class FileBasedOnDeviceModelRepositoryTest {
                     }
                 }
 
-            val result = repo.importFrom(brokenStream)
+            val result = repo.importFrom(brokenStream, anyCandidate)
 
             assertThat(result).isInstanceOf(ImportResult.Failed::class.java)
             assertThat(targetFile.exists()).isFalse()
@@ -101,7 +102,7 @@ class FileBasedOnDeviceModelRepositoryTest {
     fun `should remove the file and revert status when delete is called`() =
         runTest {
             val repo = newRepo()
-            repo.importFrom(ByteArrayInputStream(ByteArray(64)))
+            repo.importFrom(ByteArrayInputStream(ByteArray(64)), anyCandidate)
             assertThat(targetFile.exists()).isTrue()
 
             repo.delete()
@@ -113,7 +114,42 @@ class FileBasedOnDeviceModelRepositoryTest {
             }
         }
 
-    private fun newRepo(): FileBasedOnDeviceModelRepository =
+    @Test
+    fun `should reject a file whose name doesn't match before copying`() =
+        runTest {
+            val repo = newRepo(spec = strictSpec)
+
+            val result =
+                repo.importFrom(
+                    ByteArrayInputStream(ByteArray(2_000_000)),
+                    ModelImportCandidate(displayName = "holiday-photo.jpg", declaredSizeBytes = null),
+                )
+
+            assertThat(result).isInstanceOf(ImportResult.Failed::class.java)
+            assertThat((result as ImportResult.Failed).reason).contains("doesn't look like")
+            // Rejected before any bytes were streamed — no temp, no target.
+            assertThat(targetFile.exists()).isFalse()
+            assertThat(File(modelDir, "${targetFile.name}.part").exists()).isFalse()
+        }
+
+    @Test
+    fun `should reject a file that is too small after copying`() =
+        runTest {
+            val repo = newRepo(spec = strictSpec)
+
+            val result =
+                repo.importFrom(
+                    ByteArrayInputStream(ByteArray(1_000)),
+                    ModelImportCandidate(displayName = "model.litertlm", declaredSizeBytes = null),
+                )
+
+            assertThat(result).isInstanceOf(ImportResult.Failed::class.java)
+            assertThat((result as ImportResult.Failed).reason).contains("too small")
+            assertThat(targetFile.exists()).isFalse()
+            assertThat(File(modelDir, "${targetFile.name}.part").exists()).isFalse()
+        }
+
+    private fun newRepo(spec: ModelValidationSpec = permissiveSpec): FileBasedOnDeviceModelRepository =
         FileBasedOnDeviceModelRepository(
             modelFileProvider =
                 object : ModelFileProvider {
@@ -123,5 +159,28 @@ class FileBasedOnDeviceModelRepositoryTest {
                 },
             targetSelector = ImportTargetSelector { targetFile },
             dispatchers = dispatchers,
+            validation = spec,
         )
+
+    private companion object {
+        val anyCandidate = ModelImportCandidate(displayName = null, declaredSizeBytes = null)
+
+        // Accepts anything ≥ 1 byte so the existing small-payload tests are unaffected.
+        val permissiveSpec =
+            ModelValidationSpec(
+                label = "the test model",
+                expectedHint = "test file",
+                minBytes = 1,
+                nameMatches = { true },
+            )
+
+        // Realistic-shaped spec for the validation tests: requires a .litertlm name and ≥ 1 MB.
+        val strictSpec =
+            ModelValidationSpec(
+                label = "the Gemma model",
+                expectedHint = ".litertlm file",
+                minBytes = 1_000_000,
+                nameMatches = { it.endsWith(".litertlm", ignoreCase = true) },
+            )
+    }
 }

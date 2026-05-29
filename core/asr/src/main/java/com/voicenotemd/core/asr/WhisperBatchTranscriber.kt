@@ -74,9 +74,11 @@ class WhisperBatchTranscriber(
 
     private companion object {
         const val TAG = "WhisperBatch"
-        const val MODEL_SUBDIR = "whisper"
         val MODEL_FILES_BY_PREFERENCE =
             listOf(
+                // The user's SAF-imported model wins: a deliberate import should take
+                // precedence over any adb-pushed dev file. See ADR 0022 / WhisperModelLocation.
+                WhisperModelLocation.IMPORTED_FILE_NAME,
                 "ggml-small-q5_1.bin",
                 "ggml-small.bin",
                 "ggml-base-q5_1.bin",
@@ -86,3 +88,22 @@ class WhisperBatchTranscriber(
         const val PCM_FULL_SCALE = 32_768f
     }
 }
+
+/**
+ * Single source of truth for where the whisper model lives on disk, shared between the
+ * transcriber (which reads it) and the SAF import binding in `:app` (which writes it), so
+ * the two can never drift. The imported file is stored under app-private internal storage.
+ */
+object WhisperModelLocation {
+    /** Subdirectory (under `filesDir` and `getExternalFilesDir(null)`) holding whisper models. */
+    const val SUBDIR = "whisper"
+
+    /**
+     * Canonical name the SAF import writes to. Fixed (rather than preserving the picked
+     * name) so the transcriber can find it deterministically regardless of what the user's
+     * downloaded file was called; it sits first in the preference list above.
+     */
+    const val IMPORTED_FILE_NAME = "ggml-imported.bin"
+}
+
+private const val MODEL_SUBDIR = WhisperModelLocation.SUBDIR
