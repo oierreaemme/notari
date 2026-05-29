@@ -67,6 +67,7 @@ roborazzi = "1.32.2"
 robolectric = "4.14.1"
 androidxTestCore = "1.6.1"
 androidxTestExt = "1.2.1"
+androidxTestRunner = "1.6.2"
 espresso = "3.6.1"
 
 # Static analysis
@@ -153,6 +154,7 @@ roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "robora
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
 androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExt" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
 espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
 
 # Build-logic dependencies (referenced by convention plugins)

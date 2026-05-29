@@ -1,38 +1,28 @@
 package com.voicenotemd.core.database.security
 
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import org.junit.After
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 import java.io.File
 
 /**
- * Unit tests for [DatabasePassphraseProvider].
+ * Instrumented tests for [DatabasePassphraseProvider] (ADR 0019).
  *
- * **Currently @Ignore'd** — every test path here exercises `KeyStore.getInstance("AndroidKeyStore")`,
- * but Robolectric does NOT ship a shadow for the `AndroidKeyStore` security provider, so the JVM
- * call fails with `NoSuchAlgorithmException`. An earlier KDoc on this file optimistically claimed
- * Robolectric stubs it; that claim was wrong and is now removed.
+ * These run **on a device/emulator**, not under Robolectric: the provider wraps the DB
+ * passphrase with an Android Keystore AES-GCM key, and Robolectric ships no shadow for the
+ * `AndroidKeyStore` security provider (`KeyStore.getInstance("AndroidKeyStore")` throws
+ * `NoSuchAlgorithmException`). Running instrumented exercises the real Keystore — including
+ * the StrongBox-preferred / TEE-fallback path — which is the whole point of the design.
  *
- * Two viable paths to re-enable:
- *
- *  1. Move this class to `androidTest/` (instrumented) so it runs against the real Android
- *     KeyStore on an emulator/device. This is the canonical fix; the trade-off is that
- *     instrumented tests are not part of `./gradlew test` and need an emulator on CI.
- *  2. Register a JVM shim that aliases `AndroidKeyStore` onto a BouncyCastle (or in-memory)
- *     provider in a `@Before` block. Keeps the tests on the JVM but is fragile — the shim
- *     does not exercise the StrongBox / TEE behaviour that matters.
- *
- * Until one of those lands, the encryption-at-rest path is covered by on-device acceptance
- * (Pixel 6a fresh install + plaintext-to-encrypted upgrade smoke test) called out as the
- * gating follow-up in ADR 0019.
+ * The passphrase file is written to the test app's `filesDir`, redirected per-test by
+ * [setUp]/[tearDown]. The Keystore key alias persists across runs (per the test app's uid);
+ * `getOrCreateKey` is idempotent, so that is fine and intended.
  */
-@RunWith(RobolectricTestRunner::class)
-@Ignore("AndroidKeyStore not provided by Robolectric; see class KDoc and ADR 0019 follow-ups.")
+@RunWith(AndroidJUnit4::class)
 class DatabasePassphraseProviderTest {
 
     private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
@@ -49,7 +39,7 @@ class DatabasePassphraseProviderTest {
     }
 
     @Test
-    fun `getPassphrase returns 32 bytes on first call`() {
+    fun getPassphrase_returns32Bytes_onFirstCall() {
         val provider = DatabasePassphraseProvider(context)
         val passphrase = provider.getPassphrase()
         try {
@@ -60,7 +50,7 @@ class DatabasePassphraseProviderTest {
     }
 
     @Test
-    fun `getPassphrase persists enc file after first call`() {
+    fun getPassphrase_persistsEncFile_afterFirstCall() {
         val provider = DatabasePassphraseProvider(context)
         assertThat(encFile.exists()).isFalse()
         provider.getPassphrase().fill(0)
@@ -68,7 +58,7 @@ class DatabasePassphraseProviderTest {
     }
 
     @Test
-    fun `getPassphrase returns same bytes on repeated calls (round-trip)`() {
+    fun getPassphrase_returnsSameBytes_onRepeatedCalls() {
         val provider = DatabasePassphraseProvider(context)
         val first = provider.getPassphrase()
         val second = provider.getPassphrase()
@@ -81,8 +71,8 @@ class DatabasePassphraseProviderTest {
     }
 
     @Test
-    fun `getPassphrase across provider instances returns same bytes`() {
-        // Simulates app restart: two distinct provider instances, same enc file.
+    fun getPassphrase_acrossProviderInstances_returnsSameBytes() {
+        // Simulates app restart: two distinct provider instances, same enc file + Keystore key.
         val p1 = DatabasePassphraseProvider(context)
         val first = p1.getPassphrase()
 
@@ -98,7 +88,7 @@ class DatabasePassphraseProviderTest {
     }
 
     @Test
-    fun `getPassphrase generates different passphrases for different contexts (dirs)`() {
+    fun getPassphrase_differentContexts_generateDifferentPassphrases() {
         // Passphrase is random: two providers starting fresh in different dirs must differ.
         val dir2 = File(context.filesDir, "alt").also { it.mkdirs() }
         val ctx2 = object : android.content.ContextWrapper(context) {

@@ -199,16 +199,15 @@ Implementation shipped in `:core:database` under the `security` package:
   pattern check the C SQL parser does — they PBKDF2-derive instead, producing a key the
   ATTACH side could not match and a "file is not a database (code 26)" crash when Room
   later opened the file.)
-- **Tests** (`DatabasePassphraseProviderTest`) — five Robolectric-style tests covering
-  passphrase length, file persistence, round-trip stability across calls, cross-instance
-  stability (simulated app restart), and per-context isolation. **Currently `@Ignore`'d
-  at the class level**: Robolectric does not ship an `AndroidKeyStore` security-provider
-  shadow, so every test hits `NoSuchAlgorithmException` on `KeyStore.getInstance`. The
-  test bodies are kept verbatim so the intent is preserved; re-enabling requires either
-  moving the class to `androidTest/` (preferred — exercises the real Keystore on the
-  Pixel 6a) or wiring a JVM shim that aliases `AndroidKeyStore` onto a BouncyCastle
-  provider. Tracked as a follow-up; the on-device install + upgrade smoke test below is
-  the de-facto gate in the meantime.
+- **Tests** (`DatabasePassphraseProviderTest`) — five tests covering passphrase length,
+  file persistence, round-trip stability across calls, cross-instance stability (simulated
+  app restart), and per-context isolation. They live in **`androidTest/` (instrumented)**,
+  not `test/`: the provider wraps the passphrase with an Android Keystore AES-GCM key, and
+  Robolectric ships no `AndroidKeyStore` security-provider shadow (`KeyStore.getInstance`
+  throws `NoSuchAlgorithmException`). Running instrumented exercises the **real** Keystore —
+  the StrongBox-preferred / TEE-fallback path included. Verified green on the Pixel 6a via
+  `:core:database:connectedDebugAndroidTest` (5/5). The module gained
+  `androidx.test:runner` (provides `AndroidJUnitRunner`) alongside `ext-junit`/`core`.
 - **Dependency** — `net.zetetic:sqlcipher-android:4.5.6` added to
   `libs.versions.toml` and `core/database/build.gradle.kts`. Fully offline native
   code; CI no-INTERNET gate unaffected.

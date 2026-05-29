@@ -34,4 +34,11 @@ dependencies {
     testImplementation(libs.androidx.room.testing)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.robolectric)
+
+    // Instrumented tests: DatabasePassphraseProvider exercises the real Android Keystore,
+    // which Robolectric does not shadow — see DatabasePassphraseProviderTest (ADR 0019).
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.runner) // provides AndroidJUnitRunner
+    androidTestImplementation(libs.truth)
 }
