@@ -82,13 +82,13 @@ _(Nessuna voce critica aperta — i fronti ASR whisper e DB encryption sono chiu
 | **Diagnostic log cleanup** | _Superato_ da ADR 0021: i log restano nel sorgente, R8 li strippa solo in release via `-assumenosideeffects`. | ADR 0021 |
 | **Release ABI restore** | Verificato: `abiFilters` (arm64-v8a, armeabi-v7a, x86_64) è in `defaultConfig`, nessun override release. Nessuna riduzione. | `core/asr/build.gradle.kts:24` |
 | **`NoAudioPersistenceTest` whisper** | Esteso: guard statico sul bridge JNI (`whisper_jni.cpp`) per `fopen`/`fwrite`/`ofstream`/`freopen`. Vendored `whisper.cpp/` escluso (non linkato nel runtime target). | ADR 0018 follow-up |
+| **Empty catch blocks** | Risolto: i 5 `catch (_: Exception) {}` di `AndroidSpeechToTextSession` ora loggano via `Log.w` (tag `AsrFallback`, sopravvive a R8 in release). | ADR 0019 follow-up |
 
 ### 🟡 Importante — roadmap immediata
 
 | Area | Descrizione | Riferimento |
 |------|-------------|-------------|
 | **Model delivery** | SAF funziona ma non scala. Decisione bundle vs. Play Asset Delivery aperta; whisper.cpp aggiunge un secondo asset. | ADR 0008, ADR 0018 |
-| **Empty catch blocks** | `AndroidSpeechToTextSession` ha `catch (_: Exception) {}` silenziosi segnalati dalla review esterna. | ADR 0019 follow-up |
 
 ### 🟢 Miglioramenti noti (post-v1)
 

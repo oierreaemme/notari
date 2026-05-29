@@ -7,6 +7,7 @@ import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.util.Log
 import com.voicenotemd.core.common.domain.Language
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -198,13 +199,19 @@ class AndroidSpeechToTextSession(
                 stopRequested.set(true)
                 mainHandler.removeCallbacksAndMessages(null)
                 _rmsDb.value = 0f
+                // Teardown failures are non-fatal (the flow is closing regardless) but must
+                // not be silenced — CLAUDE.md §15. Log.w survives R8 in release (ADR 0021
+                // only strips v/d/i), so a recognizer that misbehaves on teardown is visible
+                // in logcat without affecting the user.
                 try {
                     recognizer.stopListening()
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    Log.w(TAG, "stopListening() failed during flow teardown", e)
                 }
                 try {
                     recognizer.destroy()
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    Log.w(TAG, "destroy() failed during flow teardown", e)
                 }
                 this@AndroidSpeechToTextSession.recognizer = null
             }
@@ -231,12 +238,18 @@ class AndroidSpeechToTextSession(
                 // down throws/reports ERROR_RECOGNIZER_BUSY, which previously killed the session.
                 r.cancel()
                 r.startListening(intent)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                // A failed restart means this segment is lost; the next error/result callback
+                // will schedule another attempt. Surface it so a recognizer stuck in a restart
+                // loop is diagnosable rather than silently dropping audio.
+                Log.w(TAG, "recognizer restart (cancel + startListening) failed", e)
             }
         }, delayMs)
     }
 
     private companion object {
+        const val TAG = "AsrFallback"
+
         // Normal gap between utterance segments — the empirical minimum that keeps the
         // platform recognizer happy when restarting back-to-back.
         const val RESTART_DELAY_MS = 50L
@@ -252,11 +265,13 @@ class AndroidSpeechToTextSession(
         _rmsDb.value = 0f
         try {
             recognizer?.stopListening()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "stopListening() failed in stop()", e)
         }
         try {
             recognizer?.destroy()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "destroy() failed in stop()", e)
         }
         recognizer = null
         // The current SpeechRecognizer impl does NOT expose a buffer for us to zero. The

@@ -153,9 +153,13 @@ fall back to TEE-backed Keystore otherwise.
 - Update CLAUDE.md §3/§6 privacy wording and the Settings → Privacy copy to
   state "encrypted at rest, always" distinctly from the optional lock.
 - Amend ADR 0013 with a forward link (done alongside this ADR).
-- Unrelated but adjacent (tracked separately): add logging to the empty
+- ~~Unrelated but adjacent (tracked separately): add logging to the empty
   `catch (_: Exception) {}` blocks in `AndroidSpeechToTextSession` per the
-  review's point A and CLAUDE.md §15.
+  review's point A and CLAUDE.md §15.~~ **Done (2026-05-29):** the five empty
+  catches (recognizer `stopListening`/`destroy` on flow teardown and in `stop()`,
+  and the `cancel`/`startListening` restart) now `Log.w` with the throwable under
+  tag `AsrFallback`. `Log.w` survives R8 in release (ADR 0021 strips only v/d/i),
+  so these non-fatal teardown failures are diagnosable without affecting the user.
 
 ## Amendment — 2026-05-29: implemented; ADR flipped to Accepted
 
