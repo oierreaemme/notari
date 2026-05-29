@@ -41,6 +41,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -154,11 +155,15 @@ fun CaptureRoute(
 
     // Keep capture alive while the screen is off / the app is backgrounded (hands-free,
     // in-car use): a microphone foreground service holds the process and background mic
-    // access. Stays alive through Recording AND Transcribing — otherwise a screen-off stop
-    // could let the OS kill the process mid-transcription, losing the note. See ADR 0018.
+    // access. Stays alive through Preparing, Recording AND Transcribing — Preparing covers
+    // the AudioRecord warm-up window (~700-1000 ms), so the FGS is already up by the time
+    // the user actually starts dictating. Without it, the OS could (in theory) kill the
+    // process mid-warm-up; including it also avoids a momentary "no service" flicker
+    // visible in the notification shade during cold-start. See ADR 0018.
     LaunchedEffect(state.phase) {
         val captureActive =
-            state.phase == CaptureUiState.Phase.Recording ||
+            state.phase == CaptureUiState.Phase.Preparing ||
+                state.phase == CaptureUiState.Phase.Recording ||
                 state.phase == CaptureUiState.Phase.Transcribing
         if (captureActive) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -227,7 +232,13 @@ internal fun CaptureScreen(
                     startedAtMs = state.structuringStartedAtMs,
                     estimatedSeconds = estimateStructuringSeconds(state.partialTranscript.length),
                 )
-            else -> RecordingPane(state = state, padding = padding, onIntent = onIntent)
+            else ->
+                RecordingPane(
+                    state = state,
+                    padding = padding,
+                    onIntent = onIntent,
+                    onOpenSettings = onOpenSettings,
+                )
         }
     }
 
@@ -369,13 +380,68 @@ private fun languageDisplayName(language: Language): String =
         Language.Unknown -> "Auto"
     }
 
+/**
+ * Idle-screen banner shown when a model hasn't been imported yet (ADR 0022). Whisper
+ * missing is the blocking case (no transcription at all); Gemma missing is advisory (notes
+ * still save, as plain text). Tapping "Set up" sends the user to Settings → On-device models.
+ */
+@Composable
+private fun SetupNeededBanner(
+    whisperMissing: Boolean,
+    gemmaMissing: Boolean,
+    onOpenSettings: () -> Unit,
+) {
+    val message =
+        when {
+            whisperMissing && gemmaMissing ->
+                "Import the transcription and structuring models to start. " +
+                    "Until then, dictation won't produce text."
+            whisperMissing ->
+                "Import a transcription model to dictate. " +
+                    "Without it, recordings can't be turned into text."
+            else ->
+                "Import the Gemma model for structured notes. " +
+                    "Until then, notes are saved as plain text."
+        }
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onOpenSettings) { Text("Set up") }
+        }
+    }
+}
+
 @Composable
 private fun RecordingPane(
     state: CaptureUiState,
     padding: PaddingValues,
     onIntent: (CaptureUiIntent) -> Unit,
+    onOpenSettings: () -> Unit = {},
 ) {
     val isRecording = state.phase == CaptureUiState.Phase.Recording
+    // During Preparing we hold the same layout as Recording but render a subtler, more
+    // honest version: no reactive PulseRings (the mic isn't "alive" yet), a Linear
+    // indeterminate progress under the central text to communicate ongoing setup, and a
+    // distinct copy ("Preparazione…") so the user knows not to start speaking yet. The
+    // big button and the Discard text button still work — both route to cancelRecording
+    // in the VM (see CaptureViewModel.handleToggleRecord).
+    val isPreparing = state.phase == CaptureUiState.Phase.Preparing
+    val isCaptureActive = isRecording || isPreparing
     val transcriptScroll = rememberScrollState()
     // Keep the latest words in view as the transcript grows during long dictation.
     LaunchedEffect(state.partialTranscript) {
@@ -392,6 +458,16 @@ private fun RecordingPane(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
+        // Setup nudge: only on the idle screen, and only when a model is actually missing.
+        // Hidden during Preparing/Recording so it never competes with the live transcript.
+        if (state.phase == CaptureUiState.Phase.Idle && state.setupNeeded) {
+            SetupNeededBanner(
+                whisperMissing = state.whisperModelMissing,
+                gemmaMissing = state.gemmaModelMissing,
+                onOpenSettings = onOpenSettings,
+            )
+        }
+
         LanguageChip(
             // When no language is pinned, "Auto" means the recognizer uses the phone's
             // system locale (SpeechRecognizer does not detect the spoken language). Show
@@ -414,16 +490,34 @@ private fun RecordingPane(
         ) {
             Text(
                 text =
-                    if (isRecording) {
-                        state.partialTranscript.ifBlank { "Listening…" }
-                    } else if (state.isAppending) {
-                        "Tap the mic to append to note..."
-                    } else {
-                        "Tap the mic to capture your first thought."
+                    when {
+                        isPreparing -> "Preparazione…"
+                        isRecording -> state.partialTranscript.ifBlank { "Listening…" }
+                        state.isAppending -> "Tap the mic to append to note..."
+                        else -> "Tap the mic to capture your first thought."
                     },
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center,
             )
+            // Discreet "we're warming up, please wait a moment" indicator. Indeterminate
+            // because the warm-up duration is variable (~700-1000 ms on a Pixel 6a, longer
+            // on some Bluetooth SCO paths). We deliberately do NOT estimate seconds — the
+            // window is short enough that a counter would just add visual noise.
+            if (isPreparing) {
+                LinearProgressIndicator(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(0.4f)
+                            .padding(top = 12.dp),
+                )
+                Text(
+                    text = "Mic stabilizing — speak in a moment.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
             // Long-note advisory: Gemma E2B starts to feel slow past ~2000 chars of
             // transcript (≈ 3-4 min of dictation). Inference still completes within
             // the warm budget, but structuring quality degrades on context this long
@@ -452,7 +546,10 @@ private fun RecordingPane(
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(contentAlignment = Alignment.Center) {
-                // Anelli reattivi visibili solo durante la registrazione
+                // Anelli reattivi visibili solo durante la registrazione vera. Durante
+                // Preparing l'rmsLevel può oscillare per via dell'AGC che si stabilizza,
+                // ma mostrarli sarebbe disonesto — implicherebbe che il mic stia già
+                // catturando, mentre stiamo ancora aspettando il primo frame utile.
                 if (isRecording) {
                     PulseRings(rmsLevel = state.rmsLevel, isRecording = true)
                     PulseRings(rmsLevel = state.rmsLevel * 0.5f, isRecording = true)
@@ -464,8 +561,11 @@ private fun RecordingPane(
                     shape = CircleShape,
                     colors =
                         IconButtonDefaults.filledIconButtonColors(
+                            // Both Recording AND Preparing render the destructive (error)
+                            // color so the user can tell at a glance "tapping this will
+                            // stop / cancel". Only fully Idle shows the primary mic color.
                             containerColor =
-                                if (isRecording) {
+                                if (isCaptureActive) {
                                     MaterialTheme.colorScheme.error
                                 } else {
                                     MaterialTheme.colorScheme.primary
@@ -473,17 +573,24 @@ private fun RecordingPane(
                         ),
                 ) {
                     Icon(
-                        imageVector = if (isRecording) Icons.Outlined.Stop else Icons.Outlined.Mic,
-                        contentDescription = if (isRecording) "Stop recording" else "Start recording",
+                        imageVector = if (isCaptureActive) Icons.Outlined.Stop else Icons.Outlined.Mic,
+                        contentDescription =
+                            when {
+                                isPreparing -> "Cancel preparing"
+                                isRecording -> "Stop recording"
+                                else -> "Start recording"
+                            },
                         modifier = Modifier.size(48.dp),
                     )
                 }
             }
 
-            // Discard the in-progress take without structuring it. Shown only while
-            // recording; a low-emphasis text button so Stop stays the single prominent
-            // action (CLAUDE.md §8 recording UI).
-            if (isRecording) {
+            // Discard the in-progress take without structuring it. Shown during both
+            // Preparing and Recording so the user always has a low-emphasis "abandon"
+            // path (CLAUDE.md §8 recording UI). The big button does the same job, but
+            // having an explicit "Discard" text affordance avoids relying on the user
+            // recognising that the red button means cancel during Preparing.
+            if (isCaptureActive) {
                 TextButton(
                     onClick = { onIntent(CaptureUiIntent.CancelRecording) },
                     modifier = Modifier.padding(top = 8.dp),

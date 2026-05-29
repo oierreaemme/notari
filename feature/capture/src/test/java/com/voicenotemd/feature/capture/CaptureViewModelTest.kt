@@ -8,6 +8,8 @@ import com.voicenotemd.core.common.domain.Language
 import com.voicenotemd.core.common.domain.Note
 import com.voicenotemd.core.common.domain.UserSettings
 import com.voicenotemd.core.common.repository.NoteRepository
+import com.voicenotemd.core.common.repository.OnDeviceModelRepository
+import com.voicenotemd.core.common.repository.OnDeviceModelStatus
 import com.voicenotemd.core.common.repository.SettingsRepository
 import com.voicenotemd.core.common.usecase.SaveNoteUseCase
 import com.voicenotemd.core.common.usecase.StructureNoteUseCase
@@ -20,6 +22,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -44,6 +48,8 @@ class CaptureViewModelTest {
     private val saveNoteUseCase: SaveNoteUseCase = mockk(relaxed = true)
     private val settingsRepository: SettingsRepository = mockk(relaxed = true)
     private val noteRepository: NoteRepository = mockk(relaxed = true)
+    private val gemmaModelRepository: OnDeviceModelRepository = mockk(relaxed = true)
+    private val whisperModelRepository: OnDeviceModelRepository = mockk(relaxed = true)
 
     private var currentTime = 1000L
     private val fakeClock =
@@ -66,6 +72,16 @@ class CaptureViewModelTest {
         // an empty Flow and `.first()` throws NoSuchElementException, breaking every
         // test that exercises the structuring pipeline.
         every { settingsRepository.observe() } returns flowOf(UserSettings.Default)
+        // Default audioReady stub: emit `true` immediately. The Preparing → Recording
+        // transition relies on `audioReady.firstOrNull { it }` inside a withTimeoutOrNull;
+        // an unstubbed mock Flow would force every test into the 1.5s timeout path, which
+        // is correct but slow on the test scheduler. Tests that need to assert the
+        // intermediate Preparing state can override this with a MutableStateFlow.
+        every { speechToTextSession.audioReady } returns flowOf(true)
+        // Default: both models present, so the setup-needed banner never interferes with
+        // the existing recording/structuring tests. Tests asserting the banner override these.
+        every { gemmaModelRepository.observeStatus() } returns flowOf(OnDeviceModelStatus.Present)
+        every { whisperModelRepository.observeStatus() } returns flowOf(OnDeviceModelStatus.Present)
     }
 
     @After
@@ -84,6 +100,8 @@ class CaptureViewModelTest {
             saveNoteUseCase,
             settingsRepository,
             noteRepository,
+            gemmaModelRepository,
+            whisperModelRepository,
             savedStateHandle,
         ).also { vm ->
             vm.clock = fakeClock
@@ -94,6 +112,31 @@ class CaptureViewModelTest {
             }
         }
     }
+
+    @Test
+    fun `setupNeeded reflects missing whisper model`() =
+        runTest {
+            every { whisperModelRepository.observeStatus() } returns
+                flowOf(OnDeviceModelStatus.Missing)
+            every { gemmaModelRepository.observeStatus() } returns
+                flowOf(OnDeviceModelStatus.Present)
+
+            viewModel = createViewModel()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertThat(viewModel.uiState.value.whisperModelMissing).isTrue()
+            assertThat(viewModel.uiState.value.gemmaModelMissing).isFalse()
+            assertThat(viewModel.uiState.value.setupNeeded).isTrue()
+        }
+
+    @Test
+    fun `setupNeeded is false when both models present`() =
+        runTest {
+            viewModel = createViewModel()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertThat(viewModel.uiState.value.setupNeeded).isFalse()
+        }
 
     @Test
     fun `debounce ToggleRecord ignores taps under 300ms`() =
@@ -290,6 +333,68 @@ class CaptureViewModelTest {
             assertThat(viewModel.uiState.value.structuredPreview).isNull()
             assertThat(viewModel.uiState.value.rmsLevel).isEqualTo(0f)
             // The note was abandoned: structuring must never run.
+            coVerify(exactly = 0) { structureNoteUseCase.invoke(any(), any(), any()) }
+        }
+
+    @Test
+    fun `start recording lands in Preparing first and only moves to Recording once audio is ready`() =
+        runTest {
+            // Drive audioReady manually so we can observe the intermediate Preparing state.
+            val audioReady = MutableStateFlow(false)
+            every { speechToTextSession.audioReady } returns audioReady.asStateFlow()
+            every { speechToTextSession.rmsDb } returns emptyFlow()
+            every { speechToTextSession.start(any()) } returns
+                flow {
+                    emit(TranscriptChunk("", isFinal = false))
+                    awaitCancellation()
+                }
+
+            viewModel = createViewModel()
+            viewModel.onIntent(CaptureUiIntent.ToggleRecord)
+            viewModel.onIntent(CaptureUiIntent.PermissionResult(granted = true))
+            // Let the recording job spin up but DO NOT advance through the warm-up timeout
+            // yet. `runCurrent` runs only the currently-queued tasks (no virtual-time skip),
+            // so we see the state immediately after startRecording() but before the warm-up
+            // delay would expire — i.e. the Preparing snapshot we care about.
+            testDispatcher.scheduler.runCurrent()
+
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Preparing)
+
+            // Mic warm-up done: audioReady flips to true. The collector inside the VM
+            // should now see this and move us to Recording without waiting for the
+            // safety timeout.
+            audioReady.value = true
+            testDispatcher.scheduler.runCurrent()
+
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Recording)
+        }
+
+    @Test
+    fun `cancel during preparing returns to Idle without structuring`() =
+        runTest {
+            // Keep audioReady held at false so the VM stays in Preparing for the test.
+            val audioReady = MutableStateFlow(false)
+            every { speechToTextSession.audioReady } returns audioReady.asStateFlow()
+            every { speechToTextSession.rmsDb } returns emptyFlow()
+            every { speechToTextSession.start(any()) } returns
+                flow {
+                    emit(TranscriptChunk("", isFinal = false))
+                    awaitCancellation()
+                }
+
+            viewModel = createViewModel()
+            viewModel.onIntent(CaptureUiIntent.ToggleRecord)
+            viewModel.onIntent(CaptureUiIntent.PermissionResult(granted = true))
+            testDispatcher.scheduler.runCurrent()
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Preparing)
+
+            // User decides to abort during the warm-up grace period.
+            currentTime += 200
+            viewModel.onIntent(CaptureUiIntent.CancelRecording)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Back to a clean Idle screen, nothing structured.
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Idle)
             coVerify(exactly = 0) { structureNoteUseCase.invoke(any(), any(), any()) }
         }
 

@@ -7,8 +7,12 @@ import com.voicenotemd.core.asr.SpeechToTextSession
 import com.voicenotemd.core.asr.TranscriptChunk
 import com.voicenotemd.core.common.domain.Language
 import com.voicenotemd.core.common.domain.Note
+import com.voicenotemd.core.common.repository.GemmaModel
 import com.voicenotemd.core.common.repository.NoteRepository
+import com.voicenotemd.core.common.repository.OnDeviceModelRepository
+import com.voicenotemd.core.common.repository.OnDeviceModelStatus
 import com.voicenotemd.core.common.repository.SettingsRepository
+import com.voicenotemd.core.common.repository.WhisperModel
 import com.voicenotemd.core.common.usecase.SaveNoteUseCase
 import com.voicenotemd.core.common.usecase.StructureNoteUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,8 +24,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import java.time.Instant
 import java.util.Locale
@@ -48,6 +54,8 @@ class CaptureViewModel
         private val saveNote: SaveNoteUseCase,
         private val settingsRepository: SettingsRepository,
         private val noteRepository: NoteRepository,
+        @GemmaModel private val gemmaModelRepository: OnDeviceModelRepository,
+        @WhisperModel private val whisperModelRepository: OnDeviceModelRepository,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         /**
@@ -125,6 +133,20 @@ class CaptureViewModel
             viewModelScope.launch {
                 noteRepository.observeAll().collect { notes ->
                     existingNotes = notes
+                }
+            }
+            // Watch both on-device models so the idle screen can nudge the user to import
+            // whatever is missing (ADR 0022). observeStatus() is a StateFlow in production,
+            // so the current status arrives immediately. Missing whisper blocks transcription;
+            // missing Gemma only degrades to plain-text notes.
+            viewModelScope.launch {
+                whisperModelRepository.observeStatus().collect { status ->
+                    _uiState.update { it.copy(whisperModelMissing = status == OnDeviceModelStatus.Missing) }
+                }
+            }
+            viewModelScope.launch {
+                gemmaModelRepository.observeStatus().collect { status ->
+                    _uiState.update { it.copy(gemmaModelMissing = status == OnDeviceModelStatus.Missing) }
                 }
             }
             // Fire-and-forget engine warm-up. The user typically takes a few seconds to
@@ -216,6 +238,12 @@ class CaptureViewModel
                     }
                     viewModelScope.launch { _uiEvents.emit(CaptureUiEvent.RequestPermission) }
                 }
+                // Tap on the big button during the warm-up grace period: there is no real
+                // PCM captured yet (the audio path is still stabilising), so transcribing
+                // would just feed whisper a few hundred ms of garbage. Treat the tap as a
+                // discard — back to Idle, no inference. This matches the recording-pane
+                // Discard button's behaviour for symmetry.
+                CaptureUiState.Phase.Preparing -> cancelRecording()
                 CaptureUiState.Phase.Recording -> stopRecordingAndStructure()
                 CaptureUiState.Phase.AwaitingPermission,
                 CaptureUiState.Phase.Transcribing,
@@ -240,9 +268,12 @@ class CaptureViewModel
 
         private fun startRecording() {
             recordingJob?.cancel()
+            // Enter the warm-up grace period. We capture PCM immediately (the audio path
+            // starts the moment we collect speechToTextSession.start below) but the UI
+            // tells the user to wait — see the kdoc on [CaptureUiState.Phase.Preparing].
             _uiState.update {
                 it.copy(
-                    phase = CaptureUiState.Phase.Recording,
+                    phase = CaptureUiState.Phase.Preparing,
                     partialTranscript = "",
                     structuredPreview = null,
                     structuringFailed = false,
@@ -256,6 +287,30 @@ class CaptureViewModel
                     launch {
                         speechToTextSession.rmsDb.collect { rms ->
                             _uiState.update { it.copy(rmsLevel = rms) }
+                        }
+                    }
+
+                    // Transition Preparing → Recording as soon as the audio pipeline is
+                    // producing usable PCM (first non-silent frame), with a safety timeout
+                    // for the case where the user is completely silent after tapping the
+                    // mic — without the fallback we'd be stuck in "Preparazione…" forever.
+                    // Idempotent: only flips the phase if we're still in Preparing (a fast
+                    // CancelRecording / ToggleRecord could have already moved us elsewhere).
+                    launch {
+                        // `firstOrNull` (not `first`) so that an unimplemented or stubbed
+                        // `audioReady` (empty flow) does not throw NoSuchElementException —
+                        // we want to fall through to the timeout in that case, not crash
+                        // the recording job. The timeout itself returns `null` if the
+                        // signal never arrives; both outcomes simply move us forward.
+                        withTimeoutOrNull(PREPARING_TIMEOUT_MS) {
+                            speechToTextSession.audioReady.firstOrNull { it }
+                        }
+                        _uiState.update {
+                            if (it.phase == CaptureUiState.Phase.Preparing) {
+                                it.copy(phase = CaptureUiState.Phase.Recording)
+                            } else {
+                                it
+                            }
                         }
                     }
 
@@ -287,11 +342,15 @@ class CaptureViewModel
          * also tears down the `rmsDb` collector through structured concurrency. No audio
          * ever reached disk (ADR 0002), so this is a genuine discard.
          *
-         * No-op outside [CaptureUiState.Phase.Recording] so a stray Cancel after stop
-         * (e.g. during Structuring) can't wipe a note that's already being processed.
+         * No-op outside [CaptureUiState.Phase.Recording] / [CaptureUiState.Phase.Preparing]
+         * so a stray Cancel after stop (e.g. during Structuring) can't wipe a note that's
+         * already being processed. Allowed from Preparing too — the user may tap Discard
+         * (or the big stop button) before the mic warm-up completes, and that should
+         * cleanly tear down the session instead of getting stuck.
          */
         private fun cancelRecording() {
-            if (_uiState.value.phase != CaptureUiState.Phase.Recording) return
+            val phase = _uiState.value.phase
+            if (phase != CaptureUiState.Phase.Recording && phase != CaptureUiState.Phase.Preparing) return
             recordingJob?.cancel()
             recordingJob = null
             _uiState.update {
@@ -440,5 +499,17 @@ class CaptureViewModel
         override fun onCleared() {
             recordingJob?.cancel()
             super.onCleared()
+        }
+
+        private companion object {
+            /**
+             * Safety timeout for the [CaptureUiState.Phase.Preparing] → [CaptureUiState.Phase.Recording]
+             * transition. On a Pixel 6a the AudioRecord warm-up completes in ~700–1000 ms; this
+             * is a comfortable upper bound past which we assume the audio path is warm even if
+             * no non-silent frame has been observed (e.g. the user tapped the mic and is sitting
+             * silently before they start speaking). Without this fallback the UI would be stuck
+             * on "Preparazione…" until the user finally made a noise.
+             */
+            const val PREPARING_TIMEOUT_MS = 1500L
         }
     }

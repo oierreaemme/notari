@@ -43,7 +43,18 @@ data class CaptureUiState(
      * mid-tier Android (see ADR 0009).
      */
     val structuringStartedAtMs: Long? = null,
+    /**
+     * Whether each on-device model is absent, driving the "setup needed" banner on the
+     * idle capture screen (ADR 0022). Whisper missing means dictation can't be transcribed
+     * at all; Gemma missing only degrades to plain-text notes (the capture flow still
+     * works, per ADR 0005). Default `false` so the banner never flashes before the model
+     * repositories have reported their real status.
+     */
+    val whisperModelMissing: Boolean = false,
+    val gemmaModelMissing: Boolean = false,
 ) {
+    /** True when at least one model is missing — the idle screen should nudge to Settings. */
+    val setupNeeded: Boolean get() = whisperModelMissing || gemmaModelMissing
     /**
      * Coarse-grained phase of the capture flow. This drives the visual state machine on
      * the screen — the sub-state lives in the other [CaptureUiState] fields.
@@ -54,6 +65,16 @@ data class CaptureUiState(
 
         /** The mic permission flow is in progress. We don't render anything dramatic. */
         AwaitingPermission,
+
+        /**
+         * Mic permission was granted and [com.voicenotemd.core.asr.SpeechToTextSession.start]
+         * was just called, but the audio path hasn't yet produced its first usable frame —
+         * AudioRecord's AGC + DSP take ~700–1000 ms to stabilise on a Pixel 6a. The UI
+         * shows a brief "Preparazione…" indicator so the user doesn't speak into the
+         * warm-up window and lose the first words of the dictation. Transitions to
+         * [Recording] on the first non-silent PCM frame OR after a safety timeout.
+         */
+        Preparing,
 
         /** SpeechRecognizer is listening; the partial transcript may be growing. */
         Recording,
