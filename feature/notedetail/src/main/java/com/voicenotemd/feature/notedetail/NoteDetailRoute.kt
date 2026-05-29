@@ -16,16 +16,19 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -106,6 +109,12 @@ internal fun NoteDetailScreen(
                 },
                 actions = {
                     if (!state.isEditing && state.note != null) {
+                        IconButton(
+                            onClick = { onIntent(NoteDetailUiIntent.Restructure) },
+                            enabled = !state.isRestructuring,
+                        ) {
+                            Icon(Icons.Outlined.AutoAwesome, contentDescription = "Structure with AI")
+                        }
                         IconButton(onClick = { onIntent(NoteDetailUiIntent.Share) }) {
                             Icon(Icons.Outlined.Share, contentDescription = "Share as Markdown")
                         }
@@ -203,6 +212,16 @@ private fun NoteBody(
                 }
             }
         } else {
+            // Plain-text note (structuring failed or was never run): offer an on-demand
+            // "Structure with AI" retry. The text itself is already safe in bodyMarkdown;
+            // this just upgrades it when the device is in better shape. See ADR 0022 follow-up.
+            if (!note.structured) {
+                RestructureBanner(
+                    isRestructuring = state.isRestructuring,
+                    error = state.restructureError,
+                    onRestructure = { onIntent(NoteDetailUiIntent.Restructure) },
+                )
+            }
             Text(text = note.title.ifBlank { "Untitled" }, style = MaterialTheme.typography.headlineSmall)
             Text(
                 text =
@@ -250,6 +269,62 @@ private fun NoteBody(
                 mentions = note.mentions,
                 modifier = Modifier.padding(top = 20.dp),
             )
+        }
+    }
+}
+
+/**
+ * Banner shown on a plain-text (unstructured) note offering an on-device "Structure with
+ * AI" retry. Shows a spinner while running and an inline retry hint if it didn't succeed.
+ */
+@Composable
+private fun RestructureBanner(
+    isRestructuring: Boolean,
+    error: String?,
+    onRestructure: () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = "This note was saved as plain text — structuring didn't run.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (error != null) {
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            OutlinedButton(
+                onClick = onRestructure,
+                enabled = !isRestructuring,
+                modifier = Modifier.padding(top = 10.dp),
+            ) {
+                if (isRestructuring) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.height(18.dp).padding(end = 8.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Text("Structuring…")
+                } else {
+                    Icon(
+                        Icons.Outlined.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.height(18.dp).padding(end = 8.dp),
+                    )
+                    Text("Structure with AI")
+                }
+            }
         }
     }
 }
