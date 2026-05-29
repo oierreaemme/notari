@@ -1,6 +1,6 @@
 # 0022. Model delivery: keep SAF now, Play Asset Delivery when distribution scales
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-05-29
 
 ## Context
@@ -41,7 +41,23 @@ depends on that channel choice, which is why this ADR is **Proposed**, not
 Accepted — it documents the trade-offs so the channel decision can be made
 with eyes open.
 
-## Decision (proposed)
+## Decision
+
+**Confirmed 2026-05-29: distribute via GitHub only, with SAF model import.
+Play Asset Delivery is documented below as the future path if distribution
+ever moves to Google Play, but is not adopted now.** The author's call: the
+Play Console effort and uncertain reach are not worth it for the current
+audience, and GitHub-only is reversible — Play remains open later.
+
+This choice also **dissolves the two open questions** the proposal flagged:
+because SAF means the app never redistributes the model weights (the user
+fetches them and imports), there is no Gemma redistribution-licence question
+and no PAD sizing question to answer. They only mattered for the Play/PAD
+path, which is now deferred.
+
+The full reasoning (the rejected alternatives, the per-asset licence split,
+and the PAD mechanics) is kept below as the record for whoever revisits the
+Play option.
 
 **Keep SAF as the baseline, and adopt Play Asset Delivery (PAD) for the
 zero-friction path if and when the app is published on Google Play. Never
@@ -113,17 +129,25 @@ because their licences differ.
   (ADR 0008); PAD would actually improve this for whisper (asset packs
   update with the app) without touching the network-permission story.
 
-## Open questions (resolve before flipping to Accepted)
+## Open questions — resolved 2026-05-29
 
-1. **Distribution channel** — GitHub-only, Play, or both? Everything else
-   follows from this.
-2. **Gemma redistribution licence** — do Google's Gemma terms permit
-   shipping the weights inside a Play asset pack (with the use-restrictions
-   propagated), or must Gemma remain user-imported via SAF? This is the
-   single fact that decides whether Gemma can join whisper on PAD.
-3. **Asset-pack sizing on Play** — confirm the > 1 GB Gemma pack fits the
-   install-time / fast-follow PAD limits, or whether it must be an
-   on-demand pack fetched at first launch.
+1. **Distribution channel** — **Decided: GitHub only** (see Decision). Play
+   is deferred, not closed.
+2. **Gemma redistribution licence** — **Moot under GitHub/SAF** (we never
+   redistribute the weights). For the record, if Play is revisited: multiple
+   sources indicate **Gemma 4 ships under Apache 2.0**, which grants
+   redistribution with attribution — so the cautious "no public mirror"
+   reading from ADR 0008 (written against the older custom *Gemma Terms of
+   Use*) would likely **not** block bundling/PAD for Gemma 4. Confirm on the
+   official terms page for the specific E2B build before relying on it:
+   <https://ai.google.dev/gemma/terms>.
+3. **Asset-pack sizing on Play** — **Moot under GitHub/SAF.** For the record:
+   on-demand / fast-follow packs cap at **512 MB each**, so the > 1 GB Gemma
+   model would need either an install-time pack (combined limit 1–4 GB
+   depending on the doc generation) or a split across ~3 on-demand packs. The
+   total across all packs in one App Bundle is 2 GB; Gemma (~1.2 GB) +
+   whisper (~180 MB) ≈ 1.4 GB fits under that. Feasible, but real work — only
+   relevant if Play is adopted.
 
 ## Links
 

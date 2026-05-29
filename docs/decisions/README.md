@@ -27,7 +27,7 @@ template](https://github.com/joelparkerhenderson/architecture-decision-record/bl
 | 0019 | Accepted | [Encryption at rest, decoupled from the biometric lock](0019-encryption-at-rest-decoupled-from-biometric.md) |
 | 0020 | Accepted | [AudioRecord warm-up grace period — the "Preparazione…" phase](0020-capture-warmup-preparing-phase.md) |
 | 0021 | Accepted | [Strip informational logs from the release build via R8](0021-strip-info-logs-in-release.md) |
-| 0022 | Proposed | [Model delivery: keep SAF now, Play Asset Delivery when distribution scales](0022-model-delivery-saf-now-pad-later.md) |
+| 0022 | Accepted | [Model delivery: keep SAF now, Play Asset Delivery when distribution scales](0022-model-delivery-saf-now-pad-later.md) |
 
 ## Adding a new ADR
 
