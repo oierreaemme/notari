@@ -22,6 +22,9 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
+    // SQLCipher — encrypted DB via Room SupportOpenHelperFactory (ADR 0019)
+    implementation(libs.sqlcipher.android)
+
     implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)

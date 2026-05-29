@@ -1,7 +1,7 @@
 # 19. Encryption at rest, decoupled from the biometric lock
 
 Date: 2026-05-26
-Status: Proposed
+Status: Accepted
 
 ## Context
 
@@ -102,16 +102,20 @@ fall back to TEE-backed Keystore otherwise.
 
 ## Implementation notes
 
-- **Dependency:** SQLCipher for Android via Room's `SupportFactory`. Verify
-  the current artifact/version against `gradle/libs.versions.toml` (the newer
-  `net.zetetic:sqlcipher-android` line vs the legacy `android-database-
+- **Dependency:** SQLCipher for Android via Room's `SupportOpenHelperFactory`.
+  Verify the current artifact/version against `gradle/libs.versions.toml` (the
+  newer `net.zetetic:sqlcipher-android` line vs the legacy `android-database-
   sqlcipher`) and that it stays compatible with the no-INTERNET CI check
-  (ADR 0007) — SQLCipher is fully offline native code, no network.
+  (ADR 0007) — SQLCipher is fully offline native code, no network. Note: the
+  newer `net.zetetic:sqlcipher-android` renames the legacy `SupportFactory` to
+  `SupportOpenHelperFactory` and removes `SQLiteDatabase.loadLibs(context)`; the
+  native lib must be loaded manually with `System.loadLibrary("sqlcipher")`
+  before any SQLCipher call (the migrator does this on the upgrade path).
 - **Passphrase provider** (`:core:database`): get-or-create a hardware-backed
   AES key in the Keystore (alias, `StrongBox` preferred, no auth requirement);
   get-or-create a strong random DB passphrase on first run; store it wrapped
   (AES-GCM + IV) in DataStore; unwrap on DB open and hand the bytes to
-  `SupportFactory`. Zero the plaintext passphrase array after use.
+  `SupportOpenHelperFactory`. Zero the plaintext passphrase array after use.
 - **minSdk 28 safe:** because the key is *not* auth-bound, none of the
   API-30+ auth-parameter calls are needed; key generation stays on the
   28-compatible path.
@@ -152,3 +156,126 @@ fall back to TEE-backed Keystore otherwise.
 - Unrelated but adjacent (tracked separately): add logging to the empty
   `catch (_: Exception) {}` blocks in `AndroidSpeechToTextSession` per the
   review's point A and CLAUDE.md §15.
+
+## Amendment — 2026-05-29: implemented; ADR flipped to Accepted
+
+Implementation shipped in `:core:database` under the `security` package:
+
+- **`DatabasePassphraseProvider`** — generates a 32-byte random passphrase on first
+  run, wraps it with a Keystore AES-256-GCM key (StrongBox preferred, TEE fallback),
+  and persists the IV+ciphertext blob to `<filesDir>/db_passphrase.enc`. Subsequent
+  runs unwrap and return the same passphrase. The returned array must be zeroed by the
+  caller after use.
+- **`PlaintextToEncryptedMigrator`** — triggered when the existing `voice_note.db` starts
+  with the SQLite plaintext magic header (`SQLite format 3 `). SQLCipher encrypts the
+  whole file including the header, so an encrypted DB never matches the plaintext magic;
+  the sentinel is stateless and self-healing. (An earlier design used
+  `db_passphrase.enc.exists()` as the sentinel and could not detect the
+  enc-file-present-+-plaintext-DB inconsistency left by a crashed prior run.) The
+  migration pre-creates the encrypted destination via `openOrCreateDatabase` so the
+  subsequent `ATTACH … KEY` binds to a properly-initialised SQLCipher header (ATTACH
+  alone silently does NOT create a new encrypted file — only `main` shows up in
+  `PRAGMA database_list` and `sqlcipher_export()` then fails with "unknown database
+  encrypted"). The export uses `rawQuery + moveToFirst()` to force `SELECT
+  sqlcipher_export('encrypted')` to actually step (sqlcipher-android's `rawExecSQL`
+  does not run SELECTs that return rows). Atomic swap uses explicit boolean checks on
+  `File.renameTo` — it can return false silently on Android. On the no-op path the
+  migrator sweeps any orphaned `voice_note_plaintext.bak` so plaintext does not linger
+  as a shadow of the user's notes.
+- **`DatabaseModule`** — loads `libsqlcipher.so` once via `System.loadLibrary("sqlcipher")`
+  (sqlcipher-android 4.5.6 removed the legacy `SQLiteDatabase.loadLibs(context)` helper
+  and does not auto-load), calls `getPassphrase()`, runs the migrator (which self-detects
+  via the magic-byte sentinel above), creates `SupportOpenHelperFactory(passphraseBytes)`,
+  and zeroes the local key copies. The byte[] passed to the factory is the **base64
+  ASCII form** of the random 32-byte secret (see `toSqlCipherPassphrase`), and the same
+  base64 string is embedded in `ATTACH … KEY '<base64>'` inside the migrator — so every
+  SQLCipher call site agrees on the underlying PBKDF2-derived page key. (The first
+  implementation attempted to use SQLCipher's raw-key form `x'<hex>'` uniformly, but
+  `net.zetetic:sqlcipher-android:4.5.6`'s `byte[]` Java APIs do not run the `x'<hex>'`
+  pattern check the C SQL parser does — they PBKDF2-derive instead, producing a key the
+  ATTACH side could not match and a "file is not a database (code 26)" crash when Room
+  later opened the file.)
+- **Tests** (`DatabasePassphraseProviderTest`) — five Robolectric-style tests covering
+  passphrase length, file persistence, round-trip stability across calls, cross-instance
+  stability (simulated app restart), and per-context isolation. **Currently `@Ignore`'d
+  at the class level**: Robolectric does not ship an `AndroidKeyStore` security-provider
+  shadow, so every test hits `NoSuchAlgorithmException` on `KeyStore.getInstance`. The
+  test bodies are kept verbatim so the intent is preserved; re-enabling requires either
+  moving the class to `androidTest/` (preferred — exercises the real Keystore on the
+  Pixel 6a) or wiring a JVM shim that aliases `AndroidKeyStore` onto a BouncyCastle
+  provider. Tracked as a follow-up; the on-device install + upgrade smoke test below is
+  the de-facto gate in the meantime.
+- **Dependency** — `net.zetetic:sqlcipher-android:4.5.6` added to
+  `libs.versions.toml` and `core/database/build.gradle.kts`. Fully offline native
+  code; CI no-INTERNET gate unaffected.
+
+On-device validation on the Pixel 6a (in-memory `NoteRepositoryImplTest` needs no
+`SupportOpenHelperFactory`) was the final acceptance gate.
+
+### On-device acceptance — 2026-05-29 (fresh install, passed)
+
+Validated on the Pixel 6a:
+
+- Dictated two notes; both saved and rendered correctly.
+- Killed the app process and reopened: both notes still readable and editable.
+- **Rebooted the device** and reopened the app: both notes still readable and
+  editable.
+
+The reboot leg is the meaningful one — it proves the hardware-backed Keystore AES
+key survives a full device restart (not just a process restart), so the wrapped DB
+passphrase unwraps correctly against the TEE/StrongBox on a cold boot and Room opens
+the encrypted database.
+
+### Critical fix — 2026-05-29: factory holds the key by reference (must not zero it)
+
+The first on-device run of the **plaintext→encrypted migration** path surfaced a
+serious bug that the fresh-install path had been hiding. `DatabaseModule` did:
+
+```kotlin
+val passphraseBytes = passphrase.toSqlCipherPassphrase().toByteArray(US_ASCII)
+val factory = SupportOpenHelperFactory(passphraseBytes)
+passphraseBytes.fill(0)   // ← WRONG
+```
+
+`SupportOpenHelperFactory` keeps the `byte[]` **by reference** (`private final byte[]
+password`) and reads it **lazily on every open**, not at construction. Zeroing the
+array immediately meant Room opened the database with an **all-zero key**.
+
+- **Fresh install masked it**: Room both *created* and *reopened* the DB with the
+  zeroed key, so the two agreed and the app "worked" — but the database was encrypted
+  under a trivial all-zero key. A silent, severe weakening of the at-rest guarantee
+  this ADR exists to provide.
+- **Migration exposed it**: the migrator encrypts the exported copy with the *real*
+  key (via `ATTACH … KEY` and `openOrCreateDatabase`, which read the bytes eagerly),
+  then Room tried to open that file with the zeroed key → `file is not a database
+  (code 26)` → crash on startup.
+
+Fix: do **not** wipe `passphraseBytes`; it must outlive `provideDatabase` for the
+lifetime of the DB. The raw 32-byte secret is still zeroed (the factory does not hold
+it). The migrator's `verifyEncryptedDb` was also switched to open through the same
+`SupportOpenHelperFactory` Room uses, so a green verify guarantees Room will open —
+the previous `SQLiteDatabase.openDatabase` verify gave a false pass.
+
+Other migration robustness fixes found in the same session: detect plaintext via the
+SQLite magic header (not a sidecar sentinel); pre-create the encrypted destination
+with `openOrCreateDatabase` so `ATTACH` binds to a real cipher header; force
+`sqlcipher_export` to step via `rawQuery + moveToFirst()`; check `File.renameTo`
+return values; sweep any orphaned `voice_note_plaintext.bak`.
+
+### On-device acceptance — 2026-05-29: plaintext→encrypted migration (passed)
+
+Seeded a pre-0019 **plaintext** `voice_note.db` (exact Room DDL + `room_master_table`
+identity hash `e86b0dd…` + `user_version=1`) with two recognisable notes, two tags,
+and a mention, pushed it into the app's `databases/` with no `db_passphrase.enc`
+present, and launched:
+
+- Migrator logged `Plaintext DB detected → sqlcipher_export complete → renames OK →
+  Migration complete`; no crash.
+- The Notes screen showed **both migrated notes** ("MIGRAZIONE Riunione progetto
+  Notari" + body and #lavoro tag; "MIGRAZIONE Spesa settimanale" + body and #spesa
+  tag) with correct dates — so `notes`, `note_tags`, and `note_mentions` all survived.
+- Restarting the app was a clean no-op (magic-byte check sees ciphertext), and no
+  `voice_note_plaintext.bak` was left on disk.
+
+Encryption at rest — fresh install **and** upgrade-from-plaintext — is confirmed
+working end-to-end on the reference device.

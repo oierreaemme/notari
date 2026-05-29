@@ -50,6 +50,10 @@ markwon = "4.6.2"
 # NOTE: confirm the latest published version against Maven Central at build time.
 vosk = "0.3.47"
 
+# Database encryption (SQLCipher via Room SupportOpenHelperFactory). Fully offline native lib.
+# See ADR 0019. Verify latest on https://search.maven.org/artifact/net.zetetic/sqlcipher-android
+sqlcipher = "4.5.6"
+
 # JSON
 moshi = "1.15.1"
 
@@ -127,6 +131,9 @@ vosk-android = { group = "com.alphacephei", name = "vosk-android", version.ref =
 markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }
 markwon-ext-tables = { group = "io.noties.markwon", name = "ext-tables", version.ref = "markwon" }
 markwon-ext-tasklist = { group = "io.noties.markwon", name = "ext-tasklist", version.ref = "markwon" }
+
+# SQLCipher — encrypted Room database (ADR 0019)
+sqlcipher-android = { group = "net.zetetic", name = "sqlcipher-android", version.ref = "sqlcipher" }
 
 # JSON parsing for Gemma output
 moshi = { group = "com.squareup.moshi", name = "moshi", version.ref = "moshi" }

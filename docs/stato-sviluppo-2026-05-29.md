@@ -115,7 +115,8 @@ _(Nessuna voce critica aperta — i fronti ASR whisper e DB encryption sono chiu
 
 ## Prossimi passi consigliati (in ordine di priorità)
 
-1. **Smoke test on-device di ADR 0019** → fresh install + upgrade da DB plaintext sul Pixel 6a per validare la migrazione end-to-end fuori dai test
-2. **Decidi model delivery** (whisper + Gemma: bundle? PAD? SAF-only?) → sblocca la distribuzione
-3. **Fix empty catch blocks** in `AndroidSpeechToTextSession` → cleanup richiesto dalla review esterna (ADR 0019 follow-up)
-4. **Migliorie accuracy in-car** (post-v1) → pre-processing noise reduction sul PCM prima di whisper; eventuale upgrade `ggml-medium` se RAM/tempo lo consentono
+1. ~~**Smoke test on-device di ADR 0019**~~ → ✅ **fatto (2026-05-29)**: due note dettate, leggibili dopo process-kill e dopo reboot del telefono; la chiave Keystore hardware-backed sopravvive al cold boot. Encryption at rest confermata end-to-end sul Pixel 6a.
+2. **Test migrazione upgrade da DB plaintext** → lo smoke sopra copre il fresh-install path; resta da validare su un device con un `voice_note.db` pre-0019 reale (oppure `adb push` di un DB plaintext) che il `sqlcipher_export()` preservi le note esistenti
+3. **Decidi model delivery** (whisper + Gemma: bundle? PAD? SAF-only?) → sblocca la distribuzione
+4. **Fix empty catch blocks** in `AndroidSpeechToTextSession` → cleanup richiesto dalla review esterna (ADR 0019 follow-up)
+5. **Migliorie accuracy in-car** (post-v1) → pre-processing noise reduction sul PCM prima di whisper; eventuale upgrade `ggml-medium` se RAM/tempo lo consentono
