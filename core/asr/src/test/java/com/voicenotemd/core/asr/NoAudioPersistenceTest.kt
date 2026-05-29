@@ -23,6 +23,11 @@ class NoAudioPersistenceTest {
             ?: File("core/asr/src/main/java").takeIf { it.exists() }
             ?: error("Could not locate :core:asr main sources from working dir: ${File(".").absolutePath}")
 
+    private val cppRoot: File =
+        File("src/main/cpp").takeIf { it.exists() }
+            ?: File("core/asr/src/main/cpp").takeIf { it.exists() }
+            ?: error("Could not locate :core:asr cpp sources from working dir: ${File(".").absolutePath}")
+
     @Test
     fun `no source file should reference MediaRecorder in code`() {
         assertNoMatch("MediaRecorder")
@@ -65,6 +70,31 @@ class NoAudioPersistenceTest {
     }
 
     @Test
+    fun `JNI bridge sources should not write audio to disk`() {
+        // ADR 0018 follow-up: the privacy invariant must hold across the JNI seam too.
+        // The Kotlin tests above prove no Kotlin source persists audio; this test extends
+        // the same guard to OUR own native bridge (whisper_jni.cpp and any sibling file
+        // we add at the cpp top level). The vendored upstream `whisper.cpp/` submodule is
+        // intentionally excluded — it carries CLI examples / model-conversion tools that
+        // legitimately use file I/O and are NOT compiled into the runtime library targets
+        // selected by CMakeLists.txt.
+        val ourSources =
+            (cppRoot.listFiles { f -> f.isFile && f.extension in NATIVE_SOURCE_EXTENSIONS } ?: emptyArray()).toList()
+        assertThat(ourSources).isNotEmpty()
+
+        val offenders = mutableListOf<String>()
+        for (source in ourSources) {
+            val text = stripCComments(source.readText())
+            for (needle in FORBIDDEN_NATIVE_WRITE_APIS) {
+                if (text.contains(needle)) {
+                    offenders.add("${source.name}: $needle")
+                }
+            }
+        }
+        assertThat(offenders).isEmpty()
+    }
+
+    @Test
     fun `every capture session that owns the mic zeroes its PCM buffer`() {
         // The privacy contract for an owned buffer (ADR 0002 / ADR 0019): in-RAM PCM MUST be
         // overwritten with zeros before release. Assert a zeroing call exists in every file
@@ -100,4 +130,18 @@ class NoAudioPersistenceTest {
         source
             .replace(Regex("/\\*[\\s\\S]*?\\*/"), " ")
             .replace(Regex("(?m)//.*$"), " ")
+
+    /** Same idea as [stripComments] but for C/C++ sources. */
+    private fun stripCComments(source: String): String =
+        source
+            .replace(Regex("/\\*[\\s\\S]*?\\*/"), " ")
+            .replace(Regex("(?m)//.*$"), " ")
+
+    private companion object {
+        val NATIVE_SOURCE_EXTENSIONS = setOf("cpp", "cc", "c", "h", "hpp")
+
+        // File-output APIs in C / C++ stdlib that could leak audio if introduced. Tight on
+        // purpose — we are guarding the small JNI bridge, not auditing arbitrary code.
+        val FORBIDDEN_NATIVE_WRITE_APIS = listOf("fopen", "fwrite", "ofstream", "freopen")
+    }
 }
