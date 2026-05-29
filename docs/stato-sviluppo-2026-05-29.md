@@ -88,7 +88,7 @@ _(Nessuna voce critica aperta — i fronti ASR whisper e DB encryption sono chiu
 
 | Area | Descrizione | Riferimento |
 |------|-------------|-------------|
-| **Model delivery** | SAF funziona ma non scala. Decisione bundle vs. Play Asset Delivery aperta; whisper.cpp aggiunge un secondo asset. | ADR 0008, ADR 0018 |
+| **Model delivery** | SAF funziona ma non scala per utenti non tecnici. Opzioni e raccomandazione (SAF ora → Play Asset Delivery quando si va su Play; download in-app escluso perché romperebbe il claim no-`INTERNET`) ora in ADR 0022 (Proposed). Decisione gated sul canale di distribuzione + licenza Gemma per ridistribuzione. | ADR 0022 (Proposed) |
 
 ### 🟢 Miglioramenti noti (post-v1)
 

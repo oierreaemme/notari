@@ -23,8 +23,11 @@ template](https://github.com/joelparkerhenderson/architecture-decision-record/bl
 | 0015 | Accepted | [LLM emits intent, deterministic code imposes form](0015-llm-intent-code-form.md) |
 | 0016 | Accepted | [Separate engine load from inference timeout](0016-engine-load-inference-split.md) |
 | 0017 | Accepted | [Language bleeding and inference contention](0017-language-bleeding-and-inference-contention.md) |
-| 0018 | Proposed | [Continuous-streaming ASR: replace SpeechRecognizer with Vosk](0018-continuous-streaming-asr-vosk.md) |
-| 0019 | Proposed | [Encryption at rest, decoupled from the biometric lock](0019-encryption-at-rest-decoupled-from-biometric.md) |
+| 0018 | Accepted | [Continuous-streaming ASR: replace SpeechRecognizer with Vosk → whisper.cpp batch](0018-continuous-streaming-asr-vosk.md) |
+| 0019 | Accepted | [Encryption at rest, decoupled from the biometric lock](0019-encryption-at-rest-decoupled-from-biometric.md) |
+| 0020 | Accepted | [AudioRecord warm-up grace period — the "Preparazione…" phase](0020-capture-warmup-preparing-phase.md) |
+| 0021 | Accepted | [Strip informational logs from the release build via R8](0021-strip-info-logs-in-release.md) |
+| 0022 | Proposed | [Model delivery: keep SAF now, Play Asset Delivery when distribution scales](0022-model-delivery-saf-now-pad-later.md) |
 
 ## Adding a new ADR
 
