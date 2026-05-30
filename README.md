@@ -2,7 +2,7 @@
 
 *Voice notes that never leave your phone, structured by Gemma 4.*
 
-[![Build](https://img.shields.io/badge/build-pending-lightgrey)](.github/workflows/ci.yml)
+[![CI](https://github.com/oierreaemme/notari/actions/workflows/ci.yml/badge.svg)](https://github.com/oierreaemme/notari/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Min SDK](https://img.shields.io/badge/minSdk-28-green)](#)
 [![Privacy](https://img.shields.io/badge/network-zero-brightgreen)](#privacy)

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved — Prompt v11: English checkbox example + bold entity (2026-05-30)
+
+- Replaced Example B in `structure_note_v11.txt` (now active) with an English commitment note that explicitly demonstrates `"I need to / I should"` → `- [ ]` checkbox and `**bold**` entity. Previously, Examples A and C (both Italian) were the only checkbox demonstrations; the model occasionally used plain `- ` bullets for English commitment notes.
+- Companion fix: `en/reminder-call.expected.json` corrected — plain bullets → `- [ ]` checkboxes (the transcript contains "I need to call", "make sure to bring up", "ask her"), tags narrowed to broad-category values (`work`, `call`).
+- See `docs/prompt-evaluations/few-shot-en-checkbox-v11.md`.
+
+### Added — Full UI localisation in 6 languages (2026-05-30)
+
+- Extracted all hardcoded UI strings from `CaptureRoute`, `NoteDetailRoute`, `NotesRoute`, `OnboardingRoute`, `SettingsRoute`, `MainActivity`, and `RecordingForegroundService` into per-module `strings.xml` (≈90 strings across 5 feature modules + app).
+- Added `values-it`, `values-de`, `values-es`, `values-fr`, `values-pt` resource sets in every feature module. The app UI now adapts to the system language across all 6 supported locales. Key translations: phase labels (`Preparazione…` / `Transkription…` / `Transcribiendo…` / `Transcription…` / `Transcrevendo…`), action buttons (`Elimina / Löschen / Eliminar / Supprimer / Excluir`, `Annulla / Abbrechen / Cancelar / Annuler / Cancelar`), and the transcription privacy subtitle.
+
 ### Added — Continuous-streaming ASR (Vosk) behind the existing seam (spike)
 
 - New `VoskSpeechToTextSession` owns the microphone via a single continuous `AudioRecord` and streams PCM frames into a Vosk recognizer. This eliminates the `SpeechRecognizer` segment gap that dropped words and emitted earcons during long, hands-free dictation — the recurring complaint when dictating long notes (e.g. in the car). See [ADR 0018](docs/decisions/0018-continuous-streaming-asr-vosk.md).
