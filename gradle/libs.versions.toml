@@ -51,8 +51,10 @@ markwon = "4.6.2"
 vosk = "0.3.47"
 
 # Database encryption (SQLCipher via Room SupportOpenHelperFactory). Fully offline native lib.
-# See ADR 0019. Verify latest on https://search.maven.org/artifact/net.zetetic/sqlcipher-android
-sqlcipher = "4.5.6"
+# See ADR 0019. 4.6.1+ ships 16 KB-page-aligned native libs (Android 15+ / Play requirement);
+# 4.5.6's libsqlcipher.so was 4 KB-aligned and failed the ELF alignment check. API (the
+# SupportOpenHelperFactory / SQLiteDatabase calls we use) is unchanged from 4.5.6.
+sqlcipher = "4.16.0"
 
 # DI annotations (JSR-330) — used in :core:common to declare cross-module @Qualifiers
 # (e.g. Gemma vs whisper model repositories) without pulling Hilt into common.
