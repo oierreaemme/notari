@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_btn_skip">Skip</string>
+    <string name="onboarding_btn_next">Next</string>
+    <string name="onboarding_btn_get_started">Get started</string>
+    <string name="onboarding_page1_headline">Speak.</string>
+    <string name="onboarding_page1_body">Tap the mic and dictate naturally. We\'ll handle the rest.</string>
+    <string name="onboarding_page2_headline">We make it Markdown.</string>
+    <string name="onboarding_page2_body">Gemma 4 turns your voice into a clean, structured note — title, tags, dates, body. All on your phone.</string>
+    <string name="onboarding_page3_headline">Audio never leaves your phone.</string>
+    <string name="onboarding_page3_body">No INTERNET permission. No cloud. The recording buffer is held in RAM and erased the moment it\'s transcribed.</string>
+</resources>

@@ -33,8 +33,8 @@ class RecordingForegroundService : Service() {
         createChannel()
         val notification: Notification =
             Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("Notari is recording")
-                .setContentText("Audio stays on this device.")
+                .setContentTitle(getString(R.string.capture_notification_title))
+                .setContentText(getString(R.string.capture_notification_text))
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
                 .setOngoing(true)
                 .build()

@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -74,7 +75,7 @@ internal fun OnboardingScreen(
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 androidx.compose.animation.AnimatedVisibility(visible = !isLastPage) {
-                    TextButton(onClick = onSkip) { Text("Skip") }
+                    TextButton(onClick = onSkip) { Text(stringResource(R.string.onboarding_btn_skip)) }
                 }
             }
 
@@ -110,7 +111,16 @@ internal fun OnboardingScreen(
                         .fillMaxWidth()
                         .padding(top = 24.dp, bottom = 8.dp),
             ) {
-                Text(text = if (isLastPage) "Get started" else "Next")
+                Text(
+                    text =
+                        if (isLastPage) {
+                            stringResource(
+                                R.string.onboarding_btn_get_started,
+                            )
+                        } else {
+                            stringResource(R.string.onboarding_btn_next)
+                        },
+                )
             }
         }
     }

@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -105,10 +106,10 @@ class MainActivity : FragmentActivity() {
             )
         prompt.authenticate(
             BiometricPrompt.PromptInfo.Builder()
-                .setTitle("Unlock Notari")
-                .setSubtitle("Your notes stay on this device. Verify it's you.")
+                .setTitle(getString(R.string.app_biometric_unlock_title))
+                .setSubtitle(getString(R.string.app_biometric_unlock_subtitle))
                 .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                .setNegativeButtonText("Quit")
+                .setNegativeButtonText(getString(R.string.app_biometric_quit))
                 .build(),
         )
     }
@@ -167,14 +168,14 @@ private fun LockedGate(onRetry: () -> Unit) {
                 tint = MaterialTheme.colorScheme.primary,
             )
             Text(
-                text = "Notari is locked",
+                text = stringResource(R.string.app_locked_title),
                 style = MaterialTheme.typography.titleLarge,
             )
             Text(
-                text = "Verify with your fingerprint or face to continue.",
+                text = stringResource(R.string.app_locked_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Button(onClick = onRetry) { Text("Try again") }
+            Button(onClick = onRetry) { Text(stringResource(R.string.app_btn_try_again)) }
         }
     }
 }

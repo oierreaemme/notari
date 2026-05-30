@@ -65,6 +65,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
@@ -95,6 +96,7 @@ fun CaptureRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val fallbackMessage = stringResource(R.string.capture_fallback_snackbar)
 
     val permissionLauncher =
         rememberLauncherForActivityResult(
@@ -127,9 +129,7 @@ fun CaptureRoute(
                     }
                 }
                 CaptureUiEvent.StructuringFellBack -> {
-                    snackbarHost.showSnackbar(
-                        "Could not auto-structure this note — saved as plain text.",
-                    )
+                    snackbarHost.showSnackbar(fallbackMessage)
                 }
             }
         }
@@ -202,16 +202,19 @@ internal fun CaptureScreen(
         snackbarHost = { SnackbarHost(snackbarHost) },
         topBar = {
             TopAppBar(
-                title = { Text("Notari") },
+                title = { Text(stringResource(R.string.capture_app_name)) },
                 actions = {
                     IconButton(onClick = { onIntent(CaptureUiIntent.ToggleTextInput) }) {
-                        Icon(Icons.Outlined.Keyboard, contentDescription = "Type note")
+                        Icon(
+                            Icons.Outlined.Keyboard,
+                            contentDescription = stringResource(R.string.capture_cd_type_note),
+                        )
                     }
                     IconButton(onClick = onOpenNotes) {
-                        Icon(Icons.Outlined.Notes, contentDescription = "Notes")
+                        Icon(Icons.Outlined.Notes, contentDescription = stringResource(R.string.capture_cd_notes))
                     }
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                        Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.capture_cd_settings))
                     }
                 },
             )
@@ -273,7 +276,7 @@ private fun TextInputSheet(
     ) {
         Column(modifier = Modifier.padding(bottom = 24.dp).padding(horizontal = 16.dp)) {
             Text(
-                text = "Silent Mic",
+                text = stringResource(R.string.capture_sheet_title_silent_mic),
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
@@ -282,7 +285,7 @@ private fun TextInputSheet(
                 value = text,
                 onValueChange = { text = it },
                 modifier = Modifier.fillMaxWidth().height(200.dp),
-                placeholder = { Text("Jot down rough notes, let Gemma structure them...") },
+                placeholder = { Text(stringResource(R.string.capture_text_input_placeholder)) },
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
             )
             Button(
@@ -295,7 +298,7 @@ private fun TextInputSheet(
                 },
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
             ) {
-                Text("Process with AI")
+                Text(stringResource(R.string.capture_btn_process_with_ai))
             }
         }
     }
@@ -315,15 +318,15 @@ private fun LanguagePickerSheet(
     ) {
         Column(modifier = Modifier.padding(bottom = 24.dp)) {
             Text(
-                text = "Dictation language",
+                text = stringResource(R.string.capture_sheet_title_dictation_language),
                 modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
             ListItem(
-                headlineContent = { Text("Auto (phone language)") },
+                headlineContent = { Text(stringResource(R.string.capture_lang_auto_label)) },
                 supportingContent = {
-                    Text("Uses your phone's language — pin one below if you dictate in another")
+                    Text(stringResource(R.string.capture_lang_auto_description))
                 },
                 trailingContent =
                     if (current == null) {
@@ -421,7 +424,7 @@ private fun SetupNeededBanner(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onOpenSettings) { Text("Set up") }
+            TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.capture_btn_set_up)) }
         }
     }
 }
@@ -449,6 +452,12 @@ private fun RecordingPane(
             transcriptScroll.animateScrollTo(transcriptScroll.maxValue)
         }
     }
+
+    val preparingText = stringResource(R.string.capture_phase_preparing)
+    val listeningText = stringResource(R.string.capture_listening)
+    val tapToAppendText = stringResource(R.string.capture_tap_to_append)
+    val tapToCaptureText = stringResource(R.string.capture_tap_to_capture)
+
     Column(
         modifier =
             Modifier
@@ -491,10 +500,10 @@ private fun RecordingPane(
             Text(
                 text =
                     when {
-                        isPreparing -> "Preparazione…"
-                        isRecording -> state.partialTranscript.ifBlank { "Listening…" }
-                        state.isAppending -> "Tap the mic to append to note..."
-                        else -> "Tap the mic to capture your first thought."
+                        isPreparing -> preparingText
+                        isRecording -> state.partialTranscript.ifBlank { listeningText }
+                        state.isAppending -> tapToAppendText
+                        else -> tapToCaptureText
                     },
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center,
@@ -511,7 +520,7 @@ private fun RecordingPane(
                             .padding(top = 12.dp),
                 )
                 Text(
-                    text = "Mic stabilizing — speak in a moment.",
+                    text = stringResource(R.string.capture_mic_stabilizing),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -533,9 +542,7 @@ private fun RecordingPane(
                             .padding(top = 12.dp),
                 ) {
                     Text(
-                        text =
-                            "Long note — structuring may take a bit longer and may " +
-                                "simplify long stretches.",
+                        text = stringResource(R.string.capture_long_note_warning),
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
@@ -576,9 +583,9 @@ private fun RecordingPane(
                         imageVector = if (isCaptureActive) Icons.Outlined.Stop else Icons.Outlined.Mic,
                         contentDescription =
                             when {
-                                isPreparing -> "Cancel preparing"
-                                isRecording -> "Stop recording"
-                                else -> "Start recording"
+                                isPreparing -> stringResource(R.string.capture_cd_cancel_preparing)
+                                isRecording -> stringResource(R.string.capture_cd_stop_recording)
+                                else -> stringResource(R.string.capture_cd_start_recording)
                             },
                         modifier = Modifier.size(48.dp),
                     )
@@ -595,7 +602,7 @@ private fun RecordingPane(
                     onClick = { onIntent(CaptureUiIntent.CancelRecording) },
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
-                    Text("Discard")
+                    Text(stringResource(R.string.capture_btn_discard))
                 }
             }
         }
@@ -692,7 +699,7 @@ private fun StructuringPane(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator()
             Text(
-                text = "Structuring your note…",
+                text = stringResource(R.string.capture_structuring_your_note),
                 modifier = Modifier.padding(top = 16.dp),
                 style = MaterialTheme.typography.titleMedium,
             )
@@ -702,17 +709,13 @@ private fun StructuringPane(
             // and a wrong promise is worse than no promise. The user gets
             // accurate feedback ("38s elapsed") instead of false comfort.
             Text(
-                text = "${elapsedSeconds}s elapsed",
+                text = stringResource(R.string.capture_structuring_elapsed, elapsedSeconds),
                 modifier = Modifier.padding(top = 8.dp),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text =
-                    "Gemma 4 E2B is running locally on your device. Structuring " +
-                        "time depends on your hardware (typically 20–90 s, longer on " +
-                        "older phones without GPU acceleration). Your audio and " +
-                        "transcript never leave the phone.",
+                text = stringResource(R.string.capture_structuring_info),
                 modifier = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -746,12 +749,12 @@ private fun TranscribingPane(padding: PaddingValues) {
     ) {
         CircularProgressIndicator(modifier = Modifier.size(48.dp))
         Text(
-            text = "Trascrizione…",
+            text = stringResource(R.string.capture_phase_transcribing),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 20.dp),
         )
         Text(
-            text = "L'audio sta diventando testo. Resta sul telefono.",
+            text = stringResource(R.string.capture_transcribing_subtitle),
             style = MaterialTheme.typography.bodySmall,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 8.dp),
@@ -783,7 +786,7 @@ private fun ReviewPane(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    text = "Saved as plain text — auto-structuring is unavailable right now.",
+                    text = stringResource(R.string.capture_structuring_failed_banner),
                     modifier = Modifier.padding(12.dp),
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -817,7 +820,7 @@ private fun ReviewPane(
             OutlinedTextField(
                 value = note.title,
                 onValueChange = { onIntent(CaptureUiIntent.EditTitle(it)) },
-                label = { Text("Title") },
+                label = { Text(stringResource(R.string.capture_label_title)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 modifier =
@@ -829,7 +832,7 @@ private fun ReviewPane(
         OutlinedTextField(
             value = note.bodyMarkdown,
             onValueChange = { onIntent(CaptureUiIntent.EditBody(it)) },
-            label = { Text("Body") },
+            label = { Text(stringResource(R.string.capture_label_body)) },
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
             modifier =
                 Modifier
@@ -874,7 +877,7 @@ private fun ReviewPane(
             horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
         ) {
             TextButton(onClick = { onIntent(CaptureUiIntent.DiscardPreview) }) {
-                Text("Discard")
+                Text(stringResource(R.string.capture_btn_discard))
             }
             Button(
                 onClick = { onIntent(CaptureUiIntent.Save) },
@@ -883,7 +886,7 @@ private fun ReviewPane(
                         containerColor = MaterialTheme.colorScheme.primary,
                     ),
             ) {
-                Text("Save note")
+                Text(stringResource(R.string.capture_btn_save_note))
             }
         }
     }
@@ -916,7 +919,7 @@ private fun LanguageChip(
             )
             Icon(
                 imageVector = Icons.Outlined.ArrowDropDown,
-                contentDescription = "Change dictation language",
+                contentDescription = stringResource(R.string.capture_cd_change_language),
                 modifier = Modifier.size(20.dp),
             )
         }

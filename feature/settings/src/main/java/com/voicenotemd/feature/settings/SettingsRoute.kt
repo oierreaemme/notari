@@ -45,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -161,10 +162,13 @@ internal fun SettingsScreen(
         snackbarHost = { SnackbarHost(snackbarHost) },
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = stringResource(R.string.settings_cd_back),
+                        )
                     }
                 },
             )
@@ -182,21 +186,18 @@ internal fun SettingsScreen(
     if (state.showDeleteAllConfirm) {
         AlertDialog(
             onDismissRequest = { onIntent(SettingsUiIntent.DismissDeleteAll) },
-            title = { Text("Delete every note?") },
+            title = { Text(stringResource(R.string.settings_delete_all_confirm_title)) },
             text = {
-                Text(
-                    "This deletes all notes from your device permanently. " +
-                        "This cannot be undone.",
-                )
+                Text(stringResource(R.string.settings_delete_all_confirm_text))
             },
             confirmButton = {
                 TextButton(onClick = { onIntent(SettingsUiIntent.ConfirmDeleteAll) }) {
-                    Text("Delete everything")
+                    Text(stringResource(R.string.settings_btn_delete_everything))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { onIntent(SettingsUiIntent.DismissDeleteAll) }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.settings_btn_cancel))
                 }
             },
         )
@@ -220,7 +221,7 @@ private fun SettingsContent(
                 .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Section(title = "On-device models") {
+        Section(title = stringResource(R.string.settings_section_on_device_models)) {
             Text(
                 "Both models run entirely on your device — no network, ever. Import each " +
                     "file you downloaded; we copy it into private storage.",
@@ -249,23 +250,21 @@ private fun SettingsContent(
             )
         }
 
-        Section(title = "Security") {
+        Section(title = stringResource(R.string.settings_section_security)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Require biometric unlock",
+                        stringResource(R.string.settings_biometric_title),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
                         if (state.biometricUnavailable) {
-                            "Set up a fingerprint or face unlock in Android Settings " +
-                                "to enable this."
+                            stringResource(R.string.settings_biometric_desc_unavailable)
                         } else {
-                            "Ask for your fingerprint or face every time the app opens. " +
-                                "Notes stay private even when your phone is unlocked."
+                            stringResource(R.string.settings_biometric_desc_available)
                         },
                         modifier = Modifier.padding(top = 4.dp),
                         style = MaterialTheme.typography.bodySmall,
@@ -281,7 +280,7 @@ private fun SettingsContent(
             }
         }
 
-        Section(title = "Privacy") {
+        Section(title = stringResource(R.string.settings_section_privacy)) {
             Text(
                 "Notari does not request the INTERNET permission and " +
                     "makes zero network calls. Audio is held only in RAM during a " +
@@ -307,7 +306,7 @@ private fun SettingsContent(
             )
         }
 
-        Section(title = "Language") {
+        Section(title = stringResource(R.string.settings_section_language)) {
             Text(
                 "By default, dictation uses your phone's system language. Android's " +
                     "speech recognizer doesn't detect the spoken language on its own, " +
@@ -320,9 +319,9 @@ private fun SettingsContent(
             )
         }
 
-        Section(title = "Danger zone") {
+        Section(title = stringResource(R.string.settings_section_danger_zone)) {
             Text(
-                "Permanently delete every note stored on this device.",
+                stringResource(R.string.settings_danger_zone_desc),
                 style = MaterialTheme.typography.bodyMedium,
             )
             Button(
@@ -337,7 +336,7 @@ private fun SettingsContent(
                         .padding(top = 8.dp)
                         .fillMaxWidth(),
             ) {
-                Text("Delete all notes")
+                Text(stringResource(R.string.settings_btn_delete_all_notes))
             }
         }
     }
@@ -380,7 +379,7 @@ private fun LanguagePicker(
             FilterChip(
                 selected = selected == null,
                 onClick = { onSelect(null) },
-                label = { Text("Auto") },
+                label = { Text(stringResource(R.string.settings_lang_auto)) },
             )
         }
         items(count = PinnableLanguages.size) { index ->
@@ -410,9 +409,9 @@ private fun OnDeviceModelRow(
     val present = section.status == OnDeviceModelStatus.Present
     val (statusLabel, statusColor) =
         if (present) {
-            "Ready" to MaterialTheme.colorScheme.primary
+            stringResource(R.string.settings_model_status_ready) to MaterialTheme.colorScheme.primary
         } else {
-            "Not imported" to MaterialTheme.colorScheme.error
+            stringResource(R.string.settings_model_status_not_imported) to MaterialTheme.colorScheme.error
         }
     Column(modifier = Modifier.padding(top = 16.dp)) {
         Text(text = title, style = MaterialTheme.typography.titleSmall)
@@ -448,16 +447,16 @@ private fun OnDeviceModelRow(
                         modifier = Modifier.padding(end = 8.dp),
                         strokeWidth = 2.dp,
                     )
-                    Text("Importing…")
+                    Text(stringResource(R.string.settings_phase_importing))
                 } else {
-                    Text(if (present) "Replace" else importLabel)
+                    Text(if (present) stringResource(R.string.settings_btn_replace) else importLabel)
                 }
             }
             if (present) {
                 OutlinedButton(
                     onClick = onDeleteModel,
                     enabled = !section.isImporting,
-                ) { Text("Remove") }
+                ) { Text(stringResource(R.string.settings_btn_remove)) }
             }
         }
     }

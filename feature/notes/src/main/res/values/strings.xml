@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notes_delete_cannot_undo">This cannot be undone.</string>
+    <string name="notes_btn_delete">Delete</string>
+    <string name="notes_btn_cancel">Cancel</string>
+    <string name="notes_search_placeholder">Search notes</string>
+    <string name="notes_filter_all">All</string>
+    <string name="notes_title">Notes</string>
+    <string name="notes_cd_clear_selection">Clear selection</string>
+    <string name="notes_cd_back">Back</string>
+    <string name="notes_cd_select_all">Select all</string>
+    <string name="notes_cd_export_selected">Export selected notes</string>
+    <string name="notes_cd_delete_selected">Delete selected notes</string>
+</resources>

@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
@@ -120,30 +121,52 @@ internal fun NotesScreen(
         snackbarHost = { SnackbarHost(snackbarHost) },
         topBar = {
             TopAppBar(
-                title = { Text(if (state.isSelectionMode) "${state.selectedNoteIds.size} selected" else "Notes") },
+                title = {
+                    Text(
+                        if (state.isSelectionMode) {
+                            "${state.selectedNoteIds.size} selected"
+                        } else {
+                            stringResource(
+                                R.string.notes_title,
+                            )
+                        },
+                    )
+                },
                 navigationIcon = {
                     if (state.isSelectionMode) {
                         IconButton(onClick = { onIntent(NotesUiIntent.ClearSelection) }) {
-                            Icon(Icons.Outlined.Close, contentDescription = "Clear selection")
+                            Icon(
+                                Icons.Outlined.Close,
+                                contentDescription = stringResource(R.string.notes_cd_clear_selection),
+                            )
                         }
                     } else {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                Icons.AutoMirrored.Outlined.ArrowBack,
+                                contentDescription = stringResource(R.string.notes_cd_back),
+                            )
                         }
                     }
                 },
                 actions = {
                     if (state.isSelectionMode) {
                         IconButton(onClick = { onIntent(NotesUiIntent.SelectAll) }) {
-                            Icon(Icons.Outlined.DoneAll, contentDescription = "Select all")
+                            Icon(
+                                Icons.Outlined.DoneAll,
+                                contentDescription = stringResource(R.string.notes_cd_select_all),
+                            )
                         }
                         IconButton(onClick = { onIntent(NotesUiIntent.RequestExport) }) {
-                            Icon(Icons.Outlined.Download, contentDescription = "Export selected notes")
+                            Icon(
+                                Icons.Outlined.Download,
+                                contentDescription = stringResource(R.string.notes_cd_export_selected),
+                            )
                         }
                         IconButton(onClick = { onIntent(NotesUiIntent.RequestDeleteSelected) }) {
                             Icon(
                                 imageVector = Icons.Outlined.Delete,
-                                contentDescription = "Delete selected notes",
+                                contentDescription = stringResource(R.string.notes_cd_delete_selected),
                                 tint = MaterialTheme.colorScheme.error,
                             )
                         }
@@ -192,15 +215,15 @@ internal fun NotesScreen(
                         },
                 )
             },
-            text = { Text("This cannot be undone.") },
+            text = { Text(stringResource(R.string.notes_delete_cannot_undo)) },
             confirmButton = {
                 TextButton(onClick = { onIntent(NotesUiIntent.ConfirmDeleteSelected) }) {
-                    Text("Delete")
+                    Text(stringResource(R.string.notes_btn_delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { onIntent(NotesUiIntent.DismissDeleteSelected) }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.notes_btn_cancel))
                 }
             },
         )
@@ -216,7 +239,7 @@ private fun SearchField(
         value = query,
         onValueChange = onChange,
         leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-        placeholder = { Text("Search notes") },
+        placeholder = { Text(stringResource(R.string.notes_search_placeholder)) },
         singleLine = true,
         // Search queries often start with proper nouns ("Marco", "Federico") —
         // sentence capitalization here matches what the user will have written
@@ -248,7 +271,7 @@ private fun TagFilterRow(
             FilterChip(
                 selected = activeTag == null,
                 onClick = { onSelect(null) },
-                label = { Text("All") },
+                label = { Text(stringResource(R.string.notes_filter_all)) },
             )
         }
         items(items = tags, key = { it.value }) { tag ->

@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Notari</string>
+    <string name="app_biometric_quit">Quit</string>
+    <string name="app_btn_try_again">Try again</string>
+    <string name="app_locked_title">Notari is locked</string>
+    <string name="app_locked_subtitle">Verify with your fingerprint or face to continue.</string>
+    <string name="app_biometric_unlock_title">Unlock Notari</string>
+    <string name="app_biometric_unlock_subtitle">Your notes stay on this device. Verify it\'s you.</string>
 </resources>

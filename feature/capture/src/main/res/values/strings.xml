@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="capture_app_name">Notari</string>
+    <string name="capture_phase_preparing">Preparing…</string>
+    <string name="capture_phase_transcribing">Transcribing…</string>
+    <string name="capture_cd_cancel_preparing">Cancel preparing</string>
+    <string name="capture_cd_type_note">Type note</string>
+    <string name="capture_cd_notes">Notes</string>
+    <string name="capture_cd_settings">Settings</string>
+    <string name="capture_cd_change_language">Change dictation language</string>
+    <string name="capture_cd_stop_recording">Stop recording</string>
+    <string name="capture_cd_start_recording">Start recording</string>
+    <string name="capture_text_input_placeholder">Jot down rough notes, let Gemma structure them...</string>
+    <string name="capture_btn_process_with_ai">Process with AI</string>
+    <string name="capture_lang_auto_label">Auto (phone language)</string>
+    <string name="capture_lang_auto_description">Uses your phone\'s language — pin one below if you dictate in another</string>
+    <string name="capture_btn_set_up">Set up</string>
+    <string name="capture_btn_discard">Discard</string>
+    <string name="capture_label_title">Title</string>
+    <string name="capture_label_body">Body</string>
+    <string name="capture_btn_save_note">Save note</string>
+    <string name="capture_notification_title">Notari is recording</string>
+    <string name="capture_notification_text">Audio stays on this device.</string>
+    <string name="capture_sheet_title_silent_mic">Silent Mic</string>
+    <string name="capture_sheet_title_dictation_language">Dictation language</string>
+    <string name="capture_structuring_your_note">Structuring your note…</string>
+    <string name="capture_mic_stabilizing">Mic stabilizing — speak in a moment.</string>
+    <string name="capture_structuring_elapsed">%1$ds elapsed</string>
+    <string name="capture_transcribing_subtitle">Audio is becoming text. Staying on device.</string>
+    <string name="capture_structuring_info">Gemma 4 E2B is running locally on your device. Structuring time depends on your hardware (typically 20–90 s, longer on older phones without GPU acceleration). Your audio and transcript never leave the phone.</string>
+    <string name="capture_long_note_warning">Long note — structuring may take a bit longer and may simplify long stretches.</string>
+    <string name="capture_structuring_failed_banner">Saved as plain text — auto-structuring is unavailable right now.</string>
+    <string name="capture_fallback_snackbar">Could not auto-structure this note — saved as plain text.</string>
+    <string name="capture_listening">Listening…</string>
+    <string name="capture_tap_to_append">Tap the mic to append to note...</string>
+    <string name="capture_tap_to_capture">Tap the mic to capture your first thought.</string>
+</resources>
