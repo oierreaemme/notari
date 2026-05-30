@@ -92,6 +92,7 @@ _(Nessuna voce critica aperta — i fronti ASR whisper e DB encryption sono chiu
 | **Onboarding SAF** | Import whisper via SAF (prima solo adb push), validazione import (nome/dimensione) con errori chiari, copy+link in Settings, banner "Set up" in cattura. | ADR 0022 |
 | **Re-strutturazione on-demand** | "Struttura con AI" nel dettaglio nota: retry della strutturazione su note rimaste plain-text, senza perdere il testo. | ADR 0005 / ADR 0022 follow-up |
 | **Indagine constrained decoding** | `litertlm 0.11.0` espone `ExperimentalFlags.enableConversationConstrainedDecoding`, ma legato al path tool-calling (OpenApiTool): adozione = re-architettura di `:core:inference`. Promettente, non urgente. | `docs/research/constrained-decoding-investigation.md` |
+| **16 KB page-size compatibility** | App **verificata 16 KB-compatibile**. ELF fix: flag NDK per le native whisper + SQLCipher `4.5.6 → 4.16.0` (LiteRT-LM 0.11.0 e DataStore 1.1.1 erano già allineate, verificato readelf). Packaging già OK (`.so` uncompressed + zipalign 16 KB). L'avviso "Android app compatibility" su HyperOS è un falso positivo della **debug build**; **release build = nessun avviso** (verificato on-device). | `docs/research/16kb-page-size-alignment.md` |
 
 ### 🟢 Miglioramenti noti (post-v1, mai iniziati)
 
@@ -124,6 +125,6 @@ Tutti i fronti bloccanti sono chiusi. I prossimi passi sono miglioramenti/igiene
 1. **Localizzazione UI** → estrarre le stringhe hardcoded (incl. quelle italiane) in `strings.xml` e tradurre nelle 6 lingue v1; sistemare l'incoerenza EN/IT attuale.
 2. **Qualità formattazione — few-shot nel prompt** → la leva più economica (1-2 esempi trascritto→JSON ideale nel prompt), nessun training né rete.
 3. **Merge `feature/asr-whisper` → `main`** quando la challenge lo consente (dopo il 4 giugno): il branch contiene whisper, encryption, onboarding SAF, re-strutturazione. `main` oggi è volutamente intatto (SpeechRecognizer) per la valutazione.
-4. **Release build firmata** → verificare se l'avviso "app compatibility" della ROM (sideload/debug) sparisce; preparare l'artefatto di distribuzione GitHub.
+4. **Signing keystore reale** → la release build è verificata (16 KB OK, nessun avviso, no crash) ma è firmata con la debug key placeholder. Serve una keystore di firma vera prima di distribuire un APK release su GitHub.
 5. **Constrained decoding (spike)** → solo se la qualità JSON lo richiede; prototipo dietro flag + misura su Pixel 6a (vedi `docs/research/`). Meriterebbe un ADR proprio.
 6. **whisper accuracy in-car** (post-v1) → pre-processing/noise-reduction sul PCM; eventuale `ggml-medium` se RAM/tempo lo consentono.
