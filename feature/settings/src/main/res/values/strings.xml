@@ -22,4 +22,5 @@
     <string name="settings_model_status_not_imported">Not imported</string>
     <string name="settings_btn_replace">Replace</string>
     <string name="settings_danger_zone_desc">Permanently delete every note stored on this device.</string>
+    <string name="settings_snackbar_all_deleted">All notes were deleted.</string>
 </resources>

@@ -11,4 +11,10 @@
     <string name="notes_cd_select_all">Select all</string>
     <string name="notes_cd_export_selected">Export selected notes</string>
     <string name="notes_cd_delete_selected">Delete selected notes</string>
+    <string name="notes_untitled">Untitled</string>
+    <string name="notes_yesterday">Yesterday</string>
+    <string name="notes_delete_one_confirm_title">Delete this note?</string>
+    <plurals name="notes_delete_many_confirm_title">
+        <item quantity="other">Delete %d notes?</item>
+    </plurals>
 </resources>

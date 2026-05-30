@@ -396,15 +396,9 @@ private fun SetupNeededBanner(
 ) {
     val message =
         when {
-            whisperMissing && gemmaMissing ->
-                "Import the transcription and structuring models to start. " +
-                    "Until then, dictation won't produce text."
-            whisperMissing ->
-                "Import a transcription model to dictate. " +
-                    "Without it, recordings can't be turned into text."
-            else ->
-                "Import the Gemma model for structured notes. " +
-                    "Until then, notes are saved as plain text."
+            whisperMissing && gemmaMissing -> stringResource(R.string.capture_setup_both_models)
+            whisperMissing -> stringResource(R.string.capture_setup_asr_only)
+            else -> stringResource(R.string.capture_setup_gemma_only)
         }
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,

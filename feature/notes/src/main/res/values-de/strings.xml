@@ -2,4 +2,10 @@
 <resources>
     <string name="notes_btn_delete">Löschen</string>
     <string name="notes_btn_cancel">Abbrechen</string>
+    <string name="notes_untitled">Ohne Titel</string>
+    <string name="notes_yesterday">Gestern</string>
+    <string name="notes_delete_one_confirm_title">Diese Notiz löschen?</string>
+    <plurals name="notes_delete_many_confirm_title">
+        <item quantity="other">%d Notizen löschen?</item>
+    </plurals>
 </resources>

@@ -5,4 +5,7 @@
     <string name="capture_btn_discard">Scarta</string>
     <string name="capture_btn_save_note">Salva nota</string>
     <string name="capture_transcribing_subtitle">L\'audio sta diventando testo. Resta sul telefono.</string>
+    <string name="capture_setup_both_models">Importa i modelli di trascrizione e strutturazione per iniziare. Fino ad allora la dettatura non produrrà testo.</string>
+    <string name="capture_setup_asr_only">Importa un modello di trascrizione per dettare. Senza di esso le registrazioni non possono essere convertite in testo.</string>
+    <string name="capture_setup_gemma_only">Importa il modello Gemma per le note strutturate. Fino ad allora le note vengono salvate come testo normale.</string>
 </resources>

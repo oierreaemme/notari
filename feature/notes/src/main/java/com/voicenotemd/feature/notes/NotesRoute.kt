@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -209,9 +210,13 @@ internal fun NotesScreen(
                 Text(
                     text =
                         if (state.selectedNoteIds.size == 1) {
-                            "Delete this note?"
+                            stringResource(R.string.notes_delete_one_confirm_title)
                         } else {
-                            "Delete ${state.selectedNoteIds.size} notes?"
+                            pluralStringResource(
+                                R.plurals.notes_delete_many_confirm_title,
+                                state.selectedNoteIds.size,
+                                state.selectedNoteIds.size,
+                            )
                         },
                 )
             },
@@ -344,12 +349,17 @@ private fun NoteCard(
             // absolute layout could collapse to a 5-line vertical date column when
             // 3+ tags pushed it sideways; this puts it on its own row up top.
             Text(
-                text = formatRelativeTimestamp(note.createdAt, ZoneId.systemDefault()),
+                text =
+                    formatRelativeTimestamp(
+                        note.createdAt,
+                        ZoneId.systemDefault(),
+                        yesterday = stringResource(R.string.notes_yesterday),
+                    ),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = note.title.ifBlank { "Untitled" }.take(60),
+                text = note.title.ifBlank { stringResource(R.string.notes_untitled) }.take(60),
                 modifier = Modifier.padding(top = 2.dp),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
@@ -417,7 +427,9 @@ internal fun formatRelativeTimestamp(
     timestamp: Instant,
     zone: ZoneId,
     now: Instant = Instant.now(),
+    yesterday: String = "Yesterday",
 ): String {
+    val locale = java.util.Locale.getDefault()
     val noteZdt = timestamp.atZone(zone)
     val nowZdt = now.atZone(zone)
     val noteDate = noteZdt.toLocalDate()
@@ -426,10 +438,10 @@ internal fun formatRelativeTimestamp(
 
     return when {
         daysBetween == 0L -> noteZdt.format(TIME_ONLY)
-        daysBetween == 1L -> "Yesterday " + noteZdt.format(TIME_ONLY)
-        daysBetween in 2..6 -> noteZdt.format(WEEKDAY_TIME)
-        noteDate.year == today.year -> noteZdt.format(DATE_NO_YEAR)
-        else -> noteZdt.format(DATE_WITH_YEAR)
+        daysBetween == 1L -> "$yesterday " + noteZdt.format(TIME_ONLY)
+        daysBetween in 2..6 -> noteZdt.format(DateTimeFormatter.ofPattern("EEE HH:mm", locale))
+        noteDate.year == today.year -> noteZdt.format(DateTimeFormatter.ofPattern("d MMM", locale))
+        else -> noteZdt.format(DateTimeFormatter.ofPattern("d MMM yyyy", locale))
     }
 }
 

@@ -5,4 +5,5 @@
     <string name="settings_btn_delete_everything">Elimina tutto</string>
     <string name="settings_btn_cancel">Annulla</string>
     <string name="settings_btn_remove">Rimuovi</string>
+    <string name="settings_snackbar_all_deleted">Tutte le note sono state eliminate.</string>
 </resources>

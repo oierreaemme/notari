@@ -96,9 +96,10 @@ fun SettingsRoute(
         viewModel.onBiometricAvailability(canAuth == BiometricManager.BIOMETRIC_SUCCESS)
     }
 
+    val allDeletedMsg = stringResource(R.string.settings_snackbar_all_deleted)
     LaunchedEffect(state.notesDeleted) {
         if (state.notesDeleted) {
-            snackbar.showSnackbar("All notes were deleted.")
+            snackbar.showSnackbar(allDeletedMsg)
             viewModel.onIntent(SettingsUiIntent.AcknowledgeDeletion)
         }
     }

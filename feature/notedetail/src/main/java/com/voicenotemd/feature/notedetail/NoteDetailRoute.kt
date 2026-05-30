@@ -250,7 +250,13 @@ private fun NoteBody(
                     onRestructure = { onIntent(NoteDetailUiIntent.Restructure) },
                 )
             }
-            Text(text = note.title.ifBlank { "Untitled" }, style = MaterialTheme.typography.headlineSmall)
+            Text(
+                text =
+                    note.title.ifBlank {
+                        stringResource(R.string.notedetail_untitled)
+                    },
+                style = MaterialTheme.typography.headlineSmall,
+            )
             Text(
                 text =
                     "Created " +

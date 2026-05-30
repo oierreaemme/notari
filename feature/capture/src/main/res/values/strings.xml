@@ -34,4 +34,7 @@
     <string name="capture_listening">Listening…</string>
     <string name="capture_tap_to_append">Tap the mic to append to note...</string>
     <string name="capture_tap_to_capture">Tap the mic to capture your first thought.</string>
+    <string name="capture_setup_both_models">Import the transcription and structuring models to start. Until then, dictation won\'t produce text.</string>
+    <string name="capture_setup_asr_only">Import a transcription model to dictate. Without it, recordings can\'t be turned into text.</string>
+    <string name="capture_setup_gemma_only">Import the Gemma model for structured notes. Until then, notes are saved as plain text.</string>
 </resources>
