@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notedetail_phase_structuring">Strukturierung…</string>
+    <string name="notedetail_btn_delete">Löschen</string>
+    <string name="notedetail_btn_cancel">Abbrechen</string>
+    <string name="notedetail_btn_save">Speichern</string>
+</resources>

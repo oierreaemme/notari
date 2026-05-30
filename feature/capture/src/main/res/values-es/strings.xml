@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="capture_phase_preparing">Preparando…</string>
+    <string name="capture_phase_transcribing">Transcribiendo…</string>
+    <string name="capture_btn_discard">Descartar</string>
+    <string name="capture_btn_save_note">Guardar nota</string>
+    <string name="capture_transcribing_subtitle">El audio se convierte en texto. Permanece en el dispositivo.</string>
+</resources>

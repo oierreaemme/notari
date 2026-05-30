@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notedetail_phase_structuring">Estruturando…</string>
+    <string name="notedetail_btn_delete">Excluir</string>
+    <string name="notedetail_btn_cancel">Cancelar</string>
+    <string name="notedetail_btn_save">Salvar</string>
+</resources>

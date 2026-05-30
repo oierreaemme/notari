@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_phase_importing">Importierung…</string>
+    <string name="settings_btn_delete_all_notes">Alle Notizen löschen</string>
+    <string name="settings_btn_delete_everything">Alles löschen</string>
+    <string name="settings_btn_cancel">Abbrechen</string>
+    <string name="settings_btn_remove">Entfernen</string>
+</resources>
