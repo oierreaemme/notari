@@ -8,6 +8,15 @@ project(whisper_jni)
 set(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS_DEBUG} -O3")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O3")
 
+# Align ELF LOAD segments to 16 KB for Android 15+ / Play Store requirement.
+# Must be set BEFORE add_subdirectory so the whisper.cpp / ggml targets inherit the flags.
+# Using CMAKE_SHARED_LINKER_FLAGS here (vs ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON which
+# requires NDK r27b+) keeps compatibility with NDK r27 (27.0.x) used on CI.
+# See https://developer.android.com/guide/practices/page-sizes
+set(CMAKE_SHARED_LINKER_FLAGS
+    "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
+)
+
 # Build the vendored whisper.cpp (+ ggml) submodule, lean for Android: no tests, no
 # examples, no server, no OpenMP (the NDK toolchain handles threads via std::thread).
 set(WHISPER_BUILD_TESTS    OFF CACHE BOOL "" FORCE)

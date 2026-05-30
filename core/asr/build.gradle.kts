@@ -24,19 +24,6 @@ android {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
 
-        // 16 KB page-size support (Android 15+ / Play requirement). Our native .so files
-        // (libwhisper, libggml-base, libwhisper_jni) must have their ELF LOAD segments
-        // aligned to 16 KB or they fail the alignment check on 16 KB-page devices. NDK r27
-        // gates this behind a flag (r28 makes it the default); ANDROID_SUPPORT_FLEXIBLE_
-        // PAGE_SIZES=ON applies it to every CMake target — including the vendored whisper.cpp
-        // / ggml submodule targets we don't edit directly. See https://developer.android.com/
-        // guide/practices/page-sizes. (Third-party .so from LiteRT-LM / SQLCipher / DataStore
-        // need their own 16 KB-aligned releases — tracked separately.)
-        externalNativeBuild {
-            cmake {
-                arguments += "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
-            }
-        }
     }
 
     // Builds whisper.cpp (vendored submodule) + the JNI bridge via CMake.
