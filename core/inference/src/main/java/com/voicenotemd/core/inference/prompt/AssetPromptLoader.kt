@@ -111,6 +111,6 @@ class AssetPromptLoader(private val context: Context) {
          * Earlier prompts stay in assets/ as legacy. To roll back, point this constant
          * at the prior version.
          */
-        const val ACTIVE_PROMPT = "structure_note_v10.txt"
+        const val ACTIVE_PROMPT = "structure_note_v11.txt"
     }
 }

@@ -1,9 +1,9 @@
 {
   "language": "en",
   "title": "Call Sarah about the proposal",
-  "tags": ["call", "sarah", "proposal"],
+  "tags": ["work", "call"],
   "mentions": [
     { "surface_form": "tomorrow at three pm", "iso_resolved": null }
   ],
-  "body_markdown": "- Call Sarah tomorrow at 3 pm about the proposal\n- Bring up the budget question\n- Ask about the Q3 timeline"
+  "body_markdown": "- [ ] Call **Sarah** tomorrow at 3 pm about the proposal\n- [ ] Raise the budget question\n- [ ] Ask about the Q3 timeline"
 }
