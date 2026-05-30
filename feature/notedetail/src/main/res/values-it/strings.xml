@@ -1,8 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="notedetail_phase_structuring">Strutturazione…</string>
+    <string name="notedetail_delete_confirm_title">Eliminare questa nota?</string>
+    <string name="notedetail_delete_cannot_undo">Questa azione non può essere annullata.</string>
     <string name="notedetail_btn_delete">Elimina</string>
     <string name="notedetail_btn_cancel">Annulla</string>
+    <string name="notedetail_label_title">Titolo</string>
+    <string name="notedetail_label_body">Corpo</string>
     <string name="notedetail_btn_save">Salva</string>
+    <string name="notedetail_phase_structuring">Strutturazione…</string>
+    <string name="notedetail_btn_structure_with_ai">Struttura con IA</string>
+    <string name="notedetail_note_not_found">Questa nota non esiste più.</string>
+    <string name="notedetail_cd_back">Indietro</string>
+    <string name="notedetail_cd_structure_with_ai">Struttura con IA</string>
+    <string name="notedetail_cd_share">Condividi come Markdown</string>
+    <string name="notedetail_cd_append_voice">Aggiungi nota vocale</string>
+    <string name="notedetail_cd_edit">Modifica</string>
+    <string name="notedetail_cd_delete">Elimina</string>
+    <string name="notedetail_title_edit_note">Modifica nota</string>
+    <string name="notedetail_title_note">Nota</string>
+    <string name="notedetail_plain_text_banner">Questa nota è stata salvata come testo normale — la strutturazione non è stata eseguita.</string>
     <string name="notedetail_untitled">Senza titolo</string>
 </resources>
