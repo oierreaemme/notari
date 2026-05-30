@@ -1,7 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="notedetail_phase_structuring">Structuration…</string>
+    <string name="notedetail_delete_confirm_title">Supprimer cette note ?</string>
+    <string name="notedetail_delete_cannot_undo">Cette action est irréversible.</string>
     <string name="notedetail_btn_delete">Supprimer</string>
     <string name="notedetail_btn_cancel">Annuler</string>
+    <string name="notedetail_label_title">Titre</string>
+    <string name="notedetail_label_body">Corps</string>
     <string name="notedetail_btn_save">Enregistrer</string>
+    <string name="notedetail_phase_structuring">Structuration…</string>
+    <string name="notedetail_btn_structure_with_ai">Structurer avec l\'IA</string>
+    <string name="notedetail_note_not_found">Cette note n\'existe plus.</string>
+    <string name="notedetail_cd_back">Retour</string>
+    <string name="notedetail_cd_structure_with_ai">Structurer avec l\'IA</string>
+    <string name="notedetail_cd_share">Partager en Markdown</string>
+    <string name="notedetail_cd_append_voice">Ajouter une note vocale</string>
+    <string name="notedetail_cd_edit">Modifier</string>
+    <string name="notedetail_cd_delete">Supprimer</string>
+    <string name="notedetail_title_edit_note">Modifier la note</string>
+    <string name="notedetail_title_note">Note</string>
+    <string name="notedetail_plain_text_banner">Cette note a été enregistrée en texte brut — la structuration n\'a pas été exécutée.</string>
+    <string name="notedetail_untitled">Sans titre</string>
 </resources>

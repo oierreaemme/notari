@@ -1,8 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="capture_app_name">Notari</string>
     <string name="capture_phase_preparing">Preparando…</string>
     <string name="capture_phase_transcribing">Transcribiendo…</string>
+    <string name="capture_cd_cancel_preparing">Cancelar preparación</string>
+    <string name="capture_cd_type_note">Escribir nota</string>
+    <string name="capture_cd_notes">Notas</string>
+    <string name="capture_cd_settings">Ajustes</string>
+    <string name="capture_cd_change_language">Cambiar idioma de dictado</string>
+    <string name="capture_cd_stop_recording">Detener grabación</string>
+    <string name="capture_cd_start_recording">Iniciar grabación</string>
+    <string name="capture_text_input_placeholder">Escribe notas rápidas, deja que Gemma las estructure…</string>
+    <string name="capture_btn_process_with_ai">Procesar con IA</string>
+    <string name="capture_lang_auto_label">Auto (idioma del teléfono)</string>
+    <string name="capture_lang_auto_description">Usa el idioma del teléfono — selecciona uno abajo si dictas en otro idioma</string>
+    <string name="capture_btn_set_up">Configurar</string>
     <string name="capture_btn_discard">Descartar</string>
+    <string name="capture_label_title">Título</string>
+    <string name="capture_label_body">Cuerpo</string>
     <string name="capture_btn_save_note">Guardar nota</string>
+    <string name="capture_notification_title">Notari está grabando</string>
+    <string name="capture_notification_text">El audio permanece en este dispositivo.</string>
+    <string name="capture_sheet_title_silent_mic">Micrófono silencioso</string>
+    <string name="capture_sheet_title_dictation_language">Idioma de dictado</string>
+    <string name="capture_structuring_your_note">Estructurando tu nota…</string>
+    <string name="capture_mic_stabilizing">Micrófono estabilizándose — habla en un momento.</string>
+    <string name="capture_structuring_elapsed">%1$ds transcurridos</string>
     <string name="capture_transcribing_subtitle">El audio se convierte en texto. Permanece en el dispositivo.</string>
+    <string name="capture_structuring_info">Gemma 4 E2B se ejecuta localmente en tu dispositivo. El tiempo de estructuración depende del hardware (normalmente 20–90 s, más en teléfonos antiguos sin aceleración GPU). Tu audio y transcripción nunca salen del teléfono.</string>
+    <string name="capture_long_note_warning">Nota larga — la estructuración puede tardar un poco más y simplificar secciones largas.</string>
+    <string name="capture_structuring_failed_banner">Guardada como texto sin formato — la estructuración automática no está disponible ahora.</string>
+    <string name="capture_fallback_snackbar">No se pudo estructurar automáticamente — guardada como texto sin formato.</string>
+    <string name="capture_listening">Escuchando…</string>
+    <string name="capture_tap_to_append">Toca el micrófono para agregar a la nota…</string>
+    <string name="capture_tap_to_capture">Toca el micrófono para capturar tu primer pensamiento.</string>
+    <string name="capture_setup_both_models">Importa los modelos de transcripción y estructuración para empezar. Hasta entonces, el dictado no producirá texto.</string>
+    <string name="capture_setup_asr_only">Importa un modelo de transcripción para dictar. Sin él, las grabaciones no pueden convertirse en texto.</string>
+    <string name="capture_setup_gemma_only">Importa el modelo Gemma para notas estructuradas. Hasta entonces, las notas se guardan como texto sin formato.</string>
 </resources>

@@ -23,4 +23,16 @@
     <string name="settings_btn_replace">Replace</string>
     <string name="settings_danger_zone_desc">Permanently delete every note stored on this device.</string>
     <string name="settings_snackbar_all_deleted">All notes were deleted.</string>
+    <string name="settings_models_intro">Both models run entirely on your device — no network, ever. Import each file you downloaded; we copy it into private storage.</string>
+    <string name="settings_gemma_title">Gemma (note structuring)</string>
+    <string name="settings_gemma_desc">Gemma 4 E2B, ~1.5 GB, a .litertlm file. Without it, notes are saved as plain text. Download it from Google AI (ai.google.dev/gemma).</string>
+    <string name="settings_whisper_title">Whisper (transcription)</string>
+    <string name="settings_whisper_desc">A whisper.cpp ggml-*.bin model (e.g. ggml-small-q5_1.bin, ~180 MB). Without it, dictation can\'t be transcribed. Download from huggingface.co/ggerganov/whisper.cpp.</string>
+    <string name="settings_import_gemma">Import .litertlm</string>
+    <string name="settings_import_whisper">Import ggml .bin</string>
+    <string name="settings_privacy_body">Notari does not request the INTERNET permission and makes zero network calls. Audio is held only in RAM during a recording and is overwritten the moment transcription completes — no audio file ever touches disk.</string>
+    <string name="settings_privacy_verify">Verify with adb: adb shell dumpsys package com.voicenotemd | grep \"permission.INTERNET\" returns nothing.</string>
+    <string name="settings_permissions_label">Permissions used:</string>
+    <string name="settings_permission_record_audio">• RECORD_AUDIO — needed to capture your voice. We never write the buffer to a file.</string>
+    <string name="settings_language_body">By default, dictation uses your phone\'s system language. Android\'s speech recognizer doesn\'t detect the spoken language on its own, so pin a language here if you dictate in a different one.</string>
 </resources>

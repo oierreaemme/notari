@@ -224,28 +224,22 @@ private fun SettingsContent(
     ) {
         Section(title = stringResource(R.string.settings_section_on_device_models)) {
             Text(
-                "Both models run entirely on your device — no network, ever. Import each " +
-                    "file you downloaded; we copy it into private storage.",
+                stringResource(R.string.settings_models_intro),
                 style = MaterialTheme.typography.bodySmall,
             )
             OnDeviceModelRow(
-                title = "Gemma (note structuring)",
-                description =
-                    "Gemma 4 E2B, ~1.5 GB, a .litertlm file. Without it, notes are saved " +
-                        "as plain text. Download it from Google AI (ai.google.dev/gemma).",
+                title = stringResource(R.string.settings_gemma_title),
+                description = stringResource(R.string.settings_gemma_desc),
                 section = state.gemma,
-                importLabel = "Import .litertlm",
+                importLabel = stringResource(R.string.settings_import_gemma),
                 onPickModel = onPickGemma,
                 onDeleteModel = { onIntent(SettingsUiIntent.DeleteModel(ManagedModel.Gemma)) },
             )
             OnDeviceModelRow(
-                title = "Whisper (transcription)",
-                description =
-                    "A whisper.cpp ggml-*.bin model (e.g. ggml-small-q5_1.bin, ~180 MB). " +
-                        "Without it, dictation can't be transcribed. Download from " +
-                        "huggingface.co/ggerganov/whisper.cpp.",
+                title = stringResource(R.string.settings_whisper_title),
+                description = stringResource(R.string.settings_whisper_desc),
                 section = state.whisper,
-                importLabel = "Import ggml .bin",
+                importLabel = stringResource(R.string.settings_import_whisper),
                 onPickModel = onPickWhisper,
                 onDeleteModel = { onIntent(SettingsUiIntent.DeleteModel(ManagedModel.Whisper)) },
             )
@@ -283,35 +277,28 @@ private fun SettingsContent(
 
         Section(title = stringResource(R.string.settings_section_privacy)) {
             Text(
-                "Notari does not request the INTERNET permission and " +
-                    "makes zero network calls. Audio is held only in RAM during a " +
-                    "recording and is overwritten the moment transcription completes — " +
-                    "no audio file ever touches disk.",
+                stringResource(R.string.settings_privacy_body),
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                "Verify with adb: adb shell dumpsys package com.voicenotemd " +
-                    "| grep \"permission.INTERNET\" returns nothing.",
+                stringResource(R.string.settings_privacy_verify),
                 modifier = Modifier.padding(top = 8.dp),
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(
-                "Permissions used:",
+                stringResource(R.string.settings_permissions_label),
                 modifier = Modifier.padding(top = 12.dp),
                 style = MaterialTheme.typography.titleSmall,
             )
             Text(
-                "• RECORD_AUDIO — needed to capture your voice. We never write the " +
-                    "buffer to a file.",
+                stringResource(R.string.settings_permission_record_audio),
                 style = MaterialTheme.typography.bodySmall,
             )
         }
 
         Section(title = stringResource(R.string.settings_section_language)) {
             Text(
-                "By default, dictation uses your phone's system language. Android's " +
-                    "speech recognizer doesn't detect the spoken language on its own, " +
-                    "so pin a language here if you dictate in a different one.",
+                stringResource(R.string.settings_language_body),
                 style = MaterialTheme.typography.bodyMedium,
             )
             LanguagePicker(

@@ -93,7 +93,16 @@ fun NotesRoute(
                 }
                 is NotesUiEvent.ExportCompleted -> snackbarHost.showSnackbar(event.message)
                 is NotesUiEvent.SelectionDeleted -> {
-                    val msg = if (event.count == 1) "1 note deleted." else "${event.count} notes deleted."
+                    val msg =
+                        if (event.count == 1) {
+                            context.getString(R.string.notes_deleted_one)
+                        } else {
+                            context.resources.getQuantityString(
+                                R.plurals.notes_deleted_many,
+                                event.count,
+                                event.count,
+                            )
+                        }
                     snackbarHost.showSnackbar(msg)
                 }
             }
@@ -125,11 +134,9 @@ internal fun NotesScreen(
                 title = {
                     Text(
                         if (state.isSelectionMode) {
-                            "${state.selectedNoteIds.size} selected"
+                            stringResource(R.string.notes_selected, state.selectedNoteIds.size)
                         } else {
-                            stringResource(
-                                R.string.notes_title,
-                            )
+                            stringResource(R.string.notes_title)
                         },
                     )
                 },
@@ -457,9 +464,9 @@ private fun EmptyState(
 ) {
     val message =
         when {
-            query.isNotBlank() -> "No notes match \"$query\"."
-            activeTag != null -> "No notes tagged #${activeTag.value} yet."
-            else -> "Tap the mic to capture your first thought."
+            query.isNotBlank() -> stringResource(R.string.notes_empty_no_match, query)
+            activeTag != null -> stringResource(R.string.notes_empty_no_tag, activeTag.value)
+            else -> stringResource(R.string.notes_empty_default)
         }
     Box(
         modifier = Modifier.fillMaxSize().padding(24.dp),

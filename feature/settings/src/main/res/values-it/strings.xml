@@ -23,4 +23,16 @@
     <string name="settings_btn_replace">Sostituisci</string>
     <string name="settings_danger_zone_desc">Elimina definitivamente tutte le note memorizzate su questo dispositivo.</string>
     <string name="settings_snackbar_all_deleted">Tutte le note sono state eliminate.</string>
+    <string name="settings_models_intro">Entrambi i modelli girano interamente sul dispositivo — nessuna rete, mai. Importa ogni file che hai scaricato; lo copieremo nell\'archiviazione privata.</string>
+    <string name="settings_gemma_title">Gemma (strutturazione note)</string>
+    <string name="settings_gemma_desc">Gemma 4 E2B, ~1,5 GB, un file .litertlm. Senza di esso le note vengono salvate come testo normale. Scaricalo da Google AI (ai.google.dev/gemma).</string>
+    <string name="settings_whisper_title">Whisper (trascrizione)</string>
+    <string name="settings_whisper_desc">Un modello whisper.cpp ggml-*.bin (es. ggml-small-q5_1.bin, ~180 MB). Senza di esso la dettatura non può essere trascritta. Scaricalo da huggingface.co/ggerganov/whisper.cpp.</string>
+    <string name="settings_import_gemma">Importa .litertlm</string>
+    <string name="settings_import_whisper">Importa ggml .bin</string>
+    <string name="settings_privacy_body">Notari non richiede il permesso INTERNET e non effettua chiamate di rete. L\'audio viene tenuto solo in RAM durante la registrazione e viene sovrascritto nel momento in cui la trascrizione è completata — nessun file audio tocca mai il disco.</string>
+    <string name="settings_privacy_verify">Verifica con adb: adb shell dumpsys package com.voicenotemd | grep \"permission.INTERNET\" non restituisce nulla.</string>
+    <string name="settings_permissions_label">Permessi utilizzati:</string>
+    <string name="settings_permission_record_audio">• RECORD_AUDIO — necessario per acquisire la voce. Il buffer non viene mai scritto su file.</string>
+    <string name="settings_language_body">Di default la dettatura usa la lingua di sistema del telefono. Il riconoscimento vocale di Android non rileva automaticamente la lingua parlata, quindi selezionane una qui se detti in una lingua diversa.</string>
 </resources>

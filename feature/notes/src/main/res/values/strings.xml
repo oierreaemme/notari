@@ -17,4 +17,12 @@
     <plurals name="notes_delete_many_confirm_title">
         <item quantity="other">Delete %d notes?</item>
     </plurals>
+    <string name="notes_selected">%d selected</string>
+    <string name="notes_deleted_one">1 note deleted.</string>
+    <plurals name="notes_deleted_many">
+        <item quantity="other">%d notes deleted.</item>
+    </plurals>
+    <string name="notes_empty_default">Tap the mic to capture your first thought.</string>
+    <string name="notes_empty_no_match">No notes match \"%s\".</string>
+    <string name="notes_empty_no_tag">No notes tagged #%s yet.</string>
 </resources>

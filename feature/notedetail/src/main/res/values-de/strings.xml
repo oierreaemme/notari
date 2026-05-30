@@ -1,7 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="notedetail_phase_structuring">Strukturierung…</string>
+    <string name="notedetail_delete_confirm_title">Diese Notiz löschen?</string>
+    <string name="notedetail_delete_cannot_undo">Diese Aktion kann nicht rückgängig gemacht werden.</string>
     <string name="notedetail_btn_delete">Löschen</string>
     <string name="notedetail_btn_cancel">Abbrechen</string>
+    <string name="notedetail_label_title">Titel</string>
+    <string name="notedetail_label_body">Inhalt</string>
     <string name="notedetail_btn_save">Speichern</string>
+    <string name="notedetail_phase_structuring">Strukturierung…</string>
+    <string name="notedetail_btn_structure_with_ai">Mit KI strukturieren</string>
+    <string name="notedetail_note_not_found">Diese Notiz existiert nicht mehr.</string>
+    <string name="notedetail_cd_back">Zurück</string>
+    <string name="notedetail_cd_structure_with_ai">Mit KI strukturieren</string>
+    <string name="notedetail_cd_share">Als Markdown teilen</string>
+    <string name="notedetail_cd_append_voice">Sprachnotiz anhängen</string>
+    <string name="notedetail_cd_edit">Bearbeiten</string>
+    <string name="notedetail_cd_delete">Löschen</string>
+    <string name="notedetail_title_edit_note">Notiz bearbeiten</string>
+    <string name="notedetail_title_note">Notiz</string>
+    <string name="notedetail_plain_text_banner">Diese Notiz wurde als Nur-Text gespeichert — Strukturierung wurde nicht ausgeführt.</string>
+    <string name="notedetail_untitled">Ohne Titel</string>
 </resources>

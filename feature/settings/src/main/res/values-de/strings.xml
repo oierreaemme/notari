@@ -1,8 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="settings_phase_importing">Importierung…</string>
-    <string name="settings_btn_delete_all_notes">Alle Notizen löschen</string>
+    <string name="settings_title">Einstellungen</string>
+    <string name="settings_delete_all_confirm_title">Alle Notizen löschen?</string>
+    <string name="settings_delete_all_confirm_text">Dadurch werden alle Notizen dauerhaft vom Gerät gelöscht. Dies kann nicht rückgängig gemacht werden.</string>
     <string name="settings_btn_delete_everything">Alles löschen</string>
     <string name="settings_btn_cancel">Abbrechen</string>
+    <string name="settings_btn_delete_all_notes">Alle Notizen löschen</string>
+    <string name="settings_lang_auto">Auto</string>
+    <string name="settings_phase_importing">Importieren…</string>
     <string name="settings_btn_remove">Entfernen</string>
+    <string name="settings_cd_back">Zurück</string>
+    <string name="settings_section_on_device_models">Modelle auf dem Gerät</string>
+    <string name="settings_section_security">Sicherheit</string>
+    <string name="settings_section_privacy">Datenschutz</string>
+    <string name="settings_section_language">Sprache</string>
+    <string name="settings_section_danger_zone">Gefahrenzone</string>
+    <string name="settings_biometric_title">Biometrische Entsperrung erforderlich</string>
+    <string name="settings_biometric_desc_unavailable">Richte in den Android-Einstellungen einen Fingerabdruck oder eine Gesichtserkennung ein, um dies zu aktivieren.</string>
+    <string name="settings_biometric_desc_available">Fordere bei jedem Öffnen der App deinen Fingerabdruck oder dein Gesicht an. Notizen bleiben privat, auch wenn dein Telefon entsperrt ist.</string>
+    <string name="settings_model_status_ready">Bereit</string>
+    <string name="settings_model_status_not_imported">Nicht importiert</string>
+    <string name="settings_btn_replace">Ersetzen</string>
+    <string name="settings_danger_zone_desc">Alle auf diesem Gerät gespeicherten Notizen dauerhaft löschen.</string>
+    <string name="settings_snackbar_all_deleted">Alle Notizen wurden gelöscht.</string>
+    <string name="settings_models_intro">Beide Modelle laufen vollständig auf dem Gerät — kein Netzwerk, nie. Importiere jede heruntergeladene Datei; wir kopieren sie in den privaten Speicher.</string>
+    <string name="settings_gemma_title">Gemma (Notizstrukturierung)</string>
+    <string name="settings_gemma_desc">Gemma 4 E2B, ~1,5 GB, eine .litertlm-Datei. Ohne sie werden Notizen als Nur-Text gespeichert. Herunterladen von Google AI (ai.google.dev/gemma).</string>
+    <string name="settings_whisper_title">Whisper (Transkription)</string>
+    <string name="settings_whisper_desc">Ein whisper.cpp ggml-*.bin-Modell (z. B. ggml-small-q5_1.bin, ~180 MB). Ohne es kann die Diktierfunktion nicht transkribieren. Herunterladen von huggingface.co/ggerganov/whisper.cpp.</string>
+    <string name="settings_import_gemma">.litertlm importieren</string>
+    <string name="settings_import_whisper">ggml .bin importieren</string>
+    <string name="settings_privacy_body">Notari fordert keine INTERNET-Berechtigung an und führt keine Netzwerkaufrufe durch. Audio wird nur im RAM gehalten und beim Abschluss der Transkription überschrieben — keine Audiodatei berührt je den Speicher.</string>
+    <string name="settings_privacy_verify">Mit adb prüfen: adb shell dumpsys package com.voicenotemd | grep \"permission.INTERNET\" gibt nichts zurück.</string>
+    <string name="settings_permissions_label">Verwendete Berechtigungen:</string>
+    <string name="settings_permission_record_audio">• RECORD_AUDIO — zum Aufnehmen der Stimme. Der Puffer wird nie in eine Datei geschrieben.</string>
+    <string name="settings_language_body">Standardmäßig verwendet die Diktierfunktion die Systemsprache des Telefons. Androids Spracherkennung erkennt die gesprochene Sprache nicht automatisch — wähle hier eine Sprache, wenn du in einer anderen diktierst.</string>
 </resources>

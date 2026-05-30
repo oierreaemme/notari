@@ -1,8 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="settings_phase_importing">Importation…</string>
-    <string name="settings_btn_delete_all_notes">Supprimer toutes les notes</string>
+    <string name="settings_title">Paramètres</string>
+    <string name="settings_delete_all_confirm_title">Supprimer toutes les notes ?</string>
+    <string name="settings_delete_all_confirm_text">Cela supprime définitivement toutes les notes de l\'appareil. Cette action est irréversible.</string>
     <string name="settings_btn_delete_everything">Tout supprimer</string>
     <string name="settings_btn_cancel">Annuler</string>
+    <string name="settings_btn_delete_all_notes">Supprimer toutes les notes</string>
+    <string name="settings_lang_auto">Auto</string>
+    <string name="settings_phase_importing">Importation…</string>
     <string name="settings_btn_remove">Supprimer</string>
+    <string name="settings_cd_back">Retour</string>
+    <string name="settings_section_on_device_models">Modèles sur l\'appareil</string>
+    <string name="settings_section_security">Sécurité</string>
+    <string name="settings_section_privacy">Confidentialité</string>
+    <string name="settings_section_language">Langue</string>
+    <string name="settings_section_danger_zone">Zone dangereuse</string>
+    <string name="settings_biometric_title">Exiger le déverrouillage biométrique</string>
+    <string name="settings_biometric_desc_unavailable">Configurez une empreinte ou la reconnaissance faciale dans les paramètres Android pour activer ceci.</string>
+    <string name="settings_biometric_desc_available">Demander votre empreinte ou votre visage à chaque ouverture de l\'application. Les notes restent privées même si votre téléphone est déverrouillé.</string>
+    <string name="settings_model_status_ready">Prêt</string>
+    <string name="settings_model_status_not_imported">Non importé</string>
+    <string name="settings_btn_replace">Remplacer</string>
+    <string name="settings_danger_zone_desc">Supprimer définitivement toutes les notes stockées sur cet appareil.</string>
+    <string name="settings_snackbar_all_deleted">Toutes les notes ont été supprimées.</string>
+    <string name="settings_models_intro">Les deux modèles s\'exécutent entièrement sur votre appareil — aucun réseau, jamais. Importez chaque fichier téléchargé ; nous le copierons dans le stockage privé.</string>
+    <string name="settings_gemma_title">Gemma (structuration des notes)</string>
+    <string name="settings_gemma_desc">Gemma 4 E2B, ~1,5 Go, un fichier .litertlm. Sans lui, les notes sont enregistrées en texte brut. Téléchargez-le depuis Google AI (ai.google.dev/gemma).</string>
+    <string name="settings_whisper_title">Whisper (transcription)</string>
+    <string name="settings_whisper_desc">Un modèle whisper.cpp ggml-*.bin (ex. ggml-small-q5_1.bin, ~180 Mo). Sans lui, la dictée ne peut pas être transcrite. Téléchargez-le depuis huggingface.co/ggerganov/whisper.cpp.</string>
+    <string name="settings_import_gemma">Importer .litertlm</string>
+    <string name="settings_import_whisper">Importer ggml .bin</string>
+    <string name="settings_privacy_body">Notari ne demande pas la permission INTERNET et n\'effectue aucun appel réseau. L\'audio est conservé uniquement en RAM pendant l\'enregistrement et est écrasé dès que la transcription est terminée — aucun fichier audio ne touche jamais le disque.</string>
+    <string name="settings_privacy_verify">Vérifier avec adb : adb shell dumpsys package com.voicenotemd | grep \"permission.INTERNET\" ne renvoie rien.</string>
+    <string name="settings_permissions_label">Permissions utilisées :</string>
+    <string name="settings_permission_record_audio">• RECORD_AUDIO — nécessaire pour capter votre voix. Le tampon n\'est jamais écrit dans un fichier.</string>
+    <string name="settings_language_body">Par défaut, la dictée utilise la langue système du téléphone. Le reconnaisseur vocal d\'Android ne détecte pas automatiquement la langue parlée — sélectionnez-en une ici si vous dictez dans une autre langue.</string>
 </resources>
