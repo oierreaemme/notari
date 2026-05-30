@@ -23,7 +23,6 @@ android {
             // by ABI so each device downloads only its own copy — tracked separately.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
-
     }
 
     // Builds whisper.cpp (vendored submodule) + the JNI bridge via CMake.
