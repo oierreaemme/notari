@@ -32,7 +32,6 @@ import javax.crypto.spec.GCMParameterSpec
  * ```
  */
 internal class DatabasePassphraseProvider(context: Context) {
-
     private val filesDir: File = context.filesDir
     private val encFile: File get() = File(filesDir, ENC_FILE_NAME)
 
@@ -79,19 +78,20 @@ internal class DatabasePassphraseProvider(context: Context) {
     }
 
     private fun generateKey(strongBox: Boolean): SecretKey {
-        val spec = KeyGenParameterSpec.Builder(
-            KEY_ALIAS,
-            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
-        )
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setKeySize(KEY_SIZE_BITS)
-            .apply {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && strongBox) {
-                    setIsStrongBoxBacked(true)
+        val spec =
+            KeyGenParameterSpec.Builder(
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(KEY_SIZE_BITS)
+                .apply {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && strongBox) {
+                        setIsStrongBoxBacked(true)
+                    }
                 }
-            }
-            .build()
+                .build()
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER)
             .apply { init(spec) }
             .generateKey()
@@ -101,10 +101,11 @@ internal class DatabasePassphraseProvider(context: Context) {
 
     private fun wrapAndStore(passphrase: ByteArray) {
         val key = getOrCreateKey()
-        val cipher = Cipher.getInstance(AES_GCM_NO_PADDING).apply {
-            init(Cipher.ENCRYPT_MODE, key)
-        }
-        val iv = cipher.iv              // 12 bytes for GCM
+        val cipher =
+            Cipher.getInstance(AES_GCM_NO_PADDING).apply {
+                init(Cipher.ENCRYPT_MODE, key)
+            }
+        val iv = cipher.iv // 12 bytes for GCM
         val ciphertext = cipher.doFinal(passphrase)
         // Format: [iv_len (1 byte)][iv][ciphertext]
         val blob = ByteArray(1 + iv.size + ciphertext.size)
@@ -120,16 +121,16 @@ internal class DatabasePassphraseProvider(context: Context) {
         val ivLen = blob[0].toInt() and 0xFF
         val iv = blob.copyOfRange(1, 1 + ivLen)
         val ciphertext = blob.copyOfRange(1 + ivLen, blob.size)
-        val cipher = Cipher.getInstance(AES_GCM_NO_PADDING).apply {
-            init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
-        }
+        val cipher =
+            Cipher.getInstance(AES_GCM_NO_PADDING).apply {
+                init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
+            }
         return cipher.doFinal(ciphertext)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private fun generateRandom(): ByteArray =
-        ByteArray(PASSPHRASE_BYTES).also { SecureRandom().nextBytes(it) }
+    private fun generateRandom(): ByteArray = ByteArray(PASSPHRASE_BYTES).also { SecureRandom().nextBytes(it) }
 
     companion object {
         private const val TAG = "DbPassphraseProvider"

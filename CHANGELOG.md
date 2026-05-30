@@ -40,10 +40,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `Phase.Transcribing` UI: while whisper turns PCM into text, the screen shows a dedicated "Trascrizione…" indicator instead of hiding inside "Structuring…". The microphone foreground service stays alive across `Recording` and `Transcribing` so a screen-off stop can't let the OS kill the process mid-transcription.
 - Diagnosis from the first real tests (2026-05-28): Bluetooth headset audio (HFP/SCO, ~8–16 kHz narrowband) caps transcription quality regardless of engine — `phone-mic > Bluetooth` is inherent, not a regression. Phone-mic errors on long readings are the limit of `ggml-base.bin`; the `small` model is the next step up at the cost of ~2-3× transcription time.
 
+### Added — AudioRecord warm-up grace period ("Preparazione…" phase)
+
+- New `CaptureUiState.Phase.Preparing` sits between `AwaitingPermission` and `Recording`. The capture screen now shows a discreet "Preparazione…" indicator plus a small linear progress while AudioRecord's audio path warms up (~700–1000 ms on a Pixel 6a between `startRecording()` and the first non-silent PCM frame). Without this state, users who tapped the mic and started talking immediately lost the first one or two words — the audio path was technically running but producing silence/noise. The "Listening…" copy and the reactive `PulseRings` now only appear once the mic is actually capturing usable signal.
+- `SpeechToTextSession.audioReady: Flow<Boolean>` is a new contract signal — `BatchSpeechToTextSession` flips it to `true` on the first non-silent PCM frame. The ViewModel watches it (with a 1.5 s safety timeout for the totally-silent-user case) and transitions Preparing → Recording. Default implementation on the interface is `flowOf(true)` so non-batch sessions are unaffected.
+- Cancel/discard works from `Preparing` too: tapping the big red button or the "Discard" text affordance during the warm-up cleanly tears down the session and returns to Idle, without sending the (mostly silent) PCM through whisper.
+- The microphone foreground service now stays alive across `Preparing`, `Recording`, AND `Transcribing` — so the notification shade doesn't flicker on phase transitions and the OS can't throttle the process during the warm-up.
+- Two new unit tests in `CaptureViewModelTest`: `start recording lands in Preparing first…` (drives a `MutableStateFlow<Boolean>` for `audioReady` to observe the intermediate snapshot) and `cancel during preparing returns to Idle…`.
+
+### Productionization pass on the whisper / capture work
+
+- **Release ABIs restored.** `:core:asr` now packs `arm64-v8a` + `armeabi-v7a` + `x86_64` for the bundled whisper.cpp library, instead of the spike-only `arm64-v8a`. The app installs on 32-bit ARM legacy devices and on x86_64 emulator / Play Console review environments; `arm64-v8a` remains the primary target.
+- **Diagnostic logs stripped from release.** Single `-assumenosideeffects` directive in `app/proguard-rules.pro` removes `Log.v/d/i` (including the string concatenation in the call arguments) from the release APK while keeping them active in debug. `Log.e/w` still write to logcat — real failures stay visible. The `BatchSession`, `WhisperBatch`, `AsrBtRouter`, `AsrFallback`, `VoskModel` tags all survive intact for on-device troubleshooting on `assembleDebug`. See [ADR 0021](docs/decisions/0021-strip-info-logs-in-release.md).
+- **`BatchSpeechToTextSession` arithmetic pulled into a pure function.** The RMS-dB computation that drives the waveform and the `audioReady` signal is now `computeRmsDb(samples, length)` in the (newly `internal`) companion object — testable in plain JUnit without a device. The `AudioRecord`-dependent surface still needs an instrumented test; this is documented in the new `BatchSpeechToTextSessionTest`.
+- **README** gains a "Getting the whisper.cpp transcription model" section pointing to the recommended `ggml-small-q5_1.bin` and the `adb push … run-as cp` recipe so a new contributor can stand up the ASR path without spelunking the changelog.
+- KDoc cleanup on `BatchSpeechToTextSession` — dropped references to "phase 1" / "phase 2" / "spike" now that whisper is the wired engine.
+
 ### Decisions
 
 - [ADR 0018](docs/decisions/0018-continuous-streaming-asr-vosk.md) — replace `SpeechRecognizer` with continuous-streaming Vosk (Proposed; supersedes the v2 direction of ADR 0003).
 - [ADR 0019](docs/decisions/0019-encryption-at-rest-decoupled-from-biometric.md) — always-on encryption at rest with a device-bound Keystore key, decoupled from the biometric lock (Proposed).
+- [ADR 0020](docs/decisions/0020-capture-warmup-preparing-phase.md) — `Phase.Preparing` for the AudioRecord warm-up window; transition driven by a first-non-silent signal with a 1.5 s safety timeout (Accepted).
+- [ADR 0021](docs/decisions/0021-strip-info-logs-in-release.md) — strip `Log.v/d/i` from the release build via R8 `-assumenosideeffects`, keep them in debug (Accepted).
 
 ## [1.0.1] - 2026-05-24
 

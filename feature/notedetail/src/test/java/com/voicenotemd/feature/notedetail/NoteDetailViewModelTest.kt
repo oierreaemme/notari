@@ -246,7 +246,8 @@ class NoteDetailViewModelTest {
                             language = Language.English,
                             createdAt = Instant.parse("2026-01-01T00:00:00Z"),
                             updatedAt = Instant.parse("2026-01-01T00:00:00Z"),
-                            structured = false, // fallback: model couldn't structure
+                            // fallback: model couldn't structure
+                            structured = false,
                         ),
                     lastRawResponse = "{ broken json",
                 )

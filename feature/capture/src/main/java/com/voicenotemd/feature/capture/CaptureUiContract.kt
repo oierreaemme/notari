@@ -55,6 +55,7 @@ data class CaptureUiState(
 ) {
     /** True when at least one model is missing — the idle screen should nudge to Settings. */
     val setupNeeded: Boolean get() = whisperModelMissing || gemmaModelMissing
+
     /**
      * Coarse-grained phase of the capture flow. This drives the visual state machine on
      * the screen — the sub-state lives in the other [CaptureUiState] fields.

@@ -26,7 +26,10 @@ interface OnDeviceModelRepository {
      * to be the Gemma model") instead of a successful import that then fails cryptically
      * at inference time.
      */
-    suspend fun importFrom(source: InputStream, candidate: ModelImportCandidate): ImportResult
+    suspend fun importFrom(
+        source: InputStream,
+        candidate: ModelImportCandidate,
+    ): ImportResult
 
     /** Permanently delete the on-device model. After this returns, status is `Missing`. */
     suspend fun delete()

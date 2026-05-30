@@ -1,7 +1,7 @@
 # 18. Continuous-streaming ASR: replace SpeechRecognizer with Vosk
 
 Date: 2026-05-26
-Status: Proposed (supersedes the v2 direction of ADR 0003)
+Status: Accepted (supersedes the v2 direction of ADR 0003)
 
 ## Context
 
@@ -183,3 +183,44 @@ unwired, for reference.
 together; model delivery (shared with ADR 0008); a dedicated "Transcribing…" UI phase; and
 removing the spike diagnostic logs + restoring release ABIs. A dedicated ADR 0020 may later
 formalise "whisper.cpp batch" as the engine of record.
+
+## Amendment — 2026-05-29: in-car BT test completed; accuracy trade-off documented; ADR flipped to Accepted
+
+Real-world in-car test completed on the Pixel 6a (2026-05-29): same note dictated twice —
+once via the phone's internal microphone, once via Bluetooth HFP vivavoce. The active model
+was `ggml-small-q5_1.bin` (first in the `resolveModelPath()` priority list in
+`WhisperBatchTranscriber`).
+
+**Internal mic:** transcript faithful, zero misrecognitions on the test note (Italian,
+~80 words, vocabulary including "Campi Bisenzio", "astratta", "periferici").
+
+**Bluetooth HFP mic:** four misrecognitions observed on the same note:
+
+| Dictated | Transcribed |
+|---|---|
+| Luoghi | Vomii |
+| conosciute | conoscute |
+| veri | Vedi |
+| astratta | strappa |
+
+The root cause is the BT HFP codec (mSBC / CVSD), which delivers narrow-band audio
+(≤16 kHz, lossy) to `AudioRecord`. whisper.cpp receives a degraded signal; on
+phonologically distant words ("astratta" → "strappa") it produces plausible but wrong
+output. This is a physical channel limitation, not a software bug in the BT routing or
+the whisper integration.
+
+**Mitigation ceiling:** `ggml-small-q5_1` is already the largest model practical on the
+Pixel 6a. `ggml-medium` would improve accuracy further but is prohibitive in RAM and
+transcription time for daily use. Pre-processing (noise reduction on the PCM before
+passing to whisper) is the next viable improvement; tracked as a separate follow-up.
+
+**Decision:** accept the BT accuracy trade-off. The plumbing (continuous `AudioRecord`,
+BT routing via `BluetoothAudioRouter`, foreground service) is correct and proven.
+In-car use with BT remains significantly better than the previous `SpeechRecognizer`
+path (no word loss from restart gaps, no earcons). Users dictating in the car accept
+minor transcription errors as a known limitation of the BT audio channel; Gemma's
+structuring pass corrects most grammatical errors downstream.
+
+This ADR is hereby **Accepted**. Outstanding follow-ups (model delivery, diagnostic log
+cleanup, `NoAudioPersistenceTest` extension for the whisper path) are tracked in the
+report `docs/stato-sviluppo-2026-05-29.md` and do not block Accepted status.

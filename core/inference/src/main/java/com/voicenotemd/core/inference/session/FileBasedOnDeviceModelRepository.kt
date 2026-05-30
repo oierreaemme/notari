@@ -78,8 +78,8 @@ class FileBasedOnDeviceModelRepository
                         tmp.delete()
                         return@withContext ImportResult.Failed(
                             reason =
-                                "That file is only ${actualMb} MB — too small to be " +
-                                    "${validation.label} (expected at least ${minMb} MB, " +
+                                "That file is only $actualMb MB — too small to be " +
+                                    "${validation.label} (expected at least $minMb MB, " +
                                     "a ${validation.expectedHint}). Did you pick the right file?",
                         )
                     }
@@ -114,8 +114,8 @@ class FileBasedOnDeviceModelRepository
                 val minMb = validation.minBytes / 1_000_000
                 return ImportResult.Failed(
                     reason =
-                        "That file is only ${declaredMb} MB — too small to be " +
-                            "${validation.label} (expected at least ${minMb} MB). " +
+                        "That file is only $declaredMb MB — too small to be " +
+                            "${validation.label} (expected at least $minMb MB). " +
                             "Did you pick the right file?",
                 )
             }
