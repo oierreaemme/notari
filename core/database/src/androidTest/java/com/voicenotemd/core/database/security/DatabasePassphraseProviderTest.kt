@@ -24,7 +24,6 @@ import java.io.File
  */
 @RunWith(AndroidJUnit4::class)
 class DatabasePassphraseProviderTest {
-
     private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
     private val encFile: File get() = File(context.filesDir, DatabasePassphraseProvider.ENC_FILE_NAME)
 
@@ -91,9 +90,10 @@ class DatabasePassphraseProviderTest {
     fun getPassphrase_differentContexts_generateDifferentPassphrases() {
         // Passphrase is random: two providers starting fresh in different dirs must differ.
         val dir2 = File(context.filesDir, "alt").also { it.mkdirs() }
-        val ctx2 = object : android.content.ContextWrapper(context) {
-            override fun getFilesDir(): File = dir2
-        }
+        val ctx2 =
+            object : android.content.ContextWrapper(context) {
+                override fun getFilesDir(): File = dir2
+            }
         val p1 = DatabasePassphraseProvider(context)
         val p2 = DatabasePassphraseProvider(ctx2)
         val a = p1.getPassphrase()

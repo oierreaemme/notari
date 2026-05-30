@@ -2,6 +2,7 @@ package com.voicenotemd.core.asr
 
 import com.voicenotemd.core.common.domain.Language
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * On-device speech-to-text session.
@@ -45,6 +46,23 @@ interface SpeechToTextSession {
      * Resets to 0.0f when idle.
      */
     val rmsDb: Flow<Float>
+
+    /**
+     * Emits `true` the moment the underlying audio path is producing usable PCM (i.e. the
+     * first non-silent frame has been read), and stays `true` for the rest of the session.
+     *
+     * The capture screen uses this to differentiate a "Preparazione…" warm-up state from
+     * the real "Listening…" state — on a Pixel 6a, AudioRecord needs ~700–1000 ms after
+     * [start] before its AGC and audio pipeline have stabilised, and any speech inside
+     * that window comes out as silence or unintelligible noise. Without this signal,
+     * users who speak immediately after tapping the mic lose the first one or two words.
+     *
+     * **Default contract:** emit `true` immediately. Lightweight or stub implementations
+     * (e.g. the Android `SpeechRecognizer` wrapper) can ignore this concern — only the
+     * batch capture path needs the warm-up grace period.
+     */
+    val audioReady: Flow<Boolean>
+        get() = flowOf(true)
 }
 
 /**
