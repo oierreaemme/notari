@@ -7,9 +7,10 @@ import kotlinx.coroutines.flow.flowOf
 /**
  * On-device speech-to-text session.
  *
- * v1 implementation: [AndroidSpeechToTextSession] wrapping [android.speech.SpeechRecognizer].
- * v2 (post-submission): a Gemma-audio-native variant. Both will satisfy this exact contract;
- * the seam is intentional (see ADR 0003).
+ * Current implementation: [BatchSpeechToTextSession] — capture-to-RAM, transcribe at [stop]
+ * via a [BatchTranscriber] (whisper.cpp), the shape whisper needs (ADR 0018). A future
+ * Gemma-audio-native variant would satisfy this same contract; the seam is intentional
+ * (see ADR 0003).
  *
  * **Audio buffer lifetime — non-negotiable, see ADR 0002:**
  *

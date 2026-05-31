@@ -66,7 +66,7 @@ class NoAudioPersistenceTest {
                 .map { it.name }
                 .toList()
         assertThat(offenders)
-            .containsExactly("VoskSpeechToTextSession.kt", "BatchSpeechToTextSession.kt")
+            .containsExactly("BatchSpeechToTextSession.kt")
     }
 
     @Test

@@ -11,8 +11,8 @@ import android.util.Log
  * one is available, so in-car / hands-free dictation uses the earbuds rather than the phone
  * mic. Falls back silently to the phone mic when no BT device is present.
  *
- * Engine-agnostic: used by [VoskSpeechToTextSession] today and reusable by the future
- * whisper path — it only manages input routing, not the recogniser.
+ * Engine-agnostic: used by [BatchSpeechToTextSession] — it only manages input routing,
+ * not the recogniser, so it is reusable by any future ASR backend.
  *
  * NOTE: a BT headset mic uses the narrowband Hands-Free Profile (≈8–16 kHz, compressed),
  * which caps transcription quality for ANY ASR engine. This router cannot improve the

@@ -315,14 +315,11 @@ class CaptureViewModel
                     }
 
                     speechToTextSession.start(language).collect(::onTranscriptChunk)
-                    // The flow only completes on a fatal recognizer error (mic unavailable,
-                    // audio path broken). Pauses, end-of-utterance, ERROR_NO_MATCH and
-                    // ERROR_SPEECH_TIMEOUT are absorbed by the continuous-listen loop inside
-                    // AndroidSpeechToTextSession so the user can dictate long-form with
-                    // natural pauses. Normal termination happens via the stop button →
-                    // [stopRecordingAndStructure]; this branch only fires on the rare
-                    // fatal case, in which case we still try to structure whatever the
-                    // recognizer managed to capture.
+                    // The batch session captures PCM to RAM and stays open until cancelled,
+                    // so the flow normally ends via the stop button → [stopRecordingAndStructure].
+                    // This branch is the safety net for the rare case where the flow completes
+                    // on its own (e.g. the audio path broke): if we're still Recording we still
+                    // try to structure whatever was captured rather than silently dropping it.
                     if (_uiState.value.phase == CaptureUiState.Phase.Recording) {
                         stopRecordingAndStructure()
                     }

@@ -12,17 +12,12 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 
 /**
- * Phase 1 of the whisper migration (ADR 0018): the app uses a BATCH session
- * (capture-to-RAM, transcribe at stop) behind the same [SpeechToTextSession] seam. The
- * transcriber is a placeholder ([FakeBatchTranscriber]) so the record → transcribe →
- * structure flow can be validated before the native whisper.cpp engine arrives.
+ * Wires the on-device ASR path (ADR 0018): a BATCH session
+ * ([BatchSpeechToTextSession] — capture-to-RAM, transcribe at stop) behind the
+ * [SpeechToTextSession] seam, backed by the native whisper.cpp [WhisperBatchTranscriber].
  *
- * Phase 2 swaps [provideBatchTranscriber] to return a whisper.cpp-backed transcriber — a
- * one-line change, with no impact on the session or the capture flow.
- *
- * The Vosk streaming path (`VoskSpeechToTextSession` / `FallbackSpeechToTextSession`,
- * `FileVoskModelProvider`) is kept in the module for reference and is simply not wired
- * while we validate the batch flow.
+ * The session and the transcriber are the seam: swapping the transcriber (e.g. to a
+ * Gemma-audio-native variant) is a one-line change with no impact on the capture flow.
  */
 @Module
 @InstallIn(SingletonComponent::class)
