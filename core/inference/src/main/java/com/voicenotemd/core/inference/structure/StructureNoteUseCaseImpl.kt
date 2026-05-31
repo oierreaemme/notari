@@ -141,7 +141,7 @@ class StructureNoteUseCaseImpl(
             )
         }
         lastRaw = pass1Raw
-        tryBuildStructuredNote(pass1Raw, cleaned, pinnedLanguage, existingTags)
+        tryBuildStructuredNote(pass1Raw, cleaned, pinnedLanguage)
             ?.let { return StructuringResult(note = it, lastRawResponse = null) }
 
         // Pass 2 — stricter prompt. Engine is now warm so we drop the engine-load
@@ -158,7 +158,7 @@ class StructureNoteUseCaseImpl(
         val pass2Raw: String? = pass2Outcome.getOrNull()
         if (pass2Raw != null) {
             lastRaw = pass2Raw
-            tryBuildStructuredNote(pass2Raw, cleaned, pinnedLanguage, existingTags)
+            tryBuildStructuredNote(pass2Raw, cleaned, pinnedLanguage)
                 ?.let { return StructuringResult(note = it, lastRawResponse = null) }
         } else {
             val pass2Reason =
@@ -179,14 +179,13 @@ class StructureNoteUseCaseImpl(
         raw: String,
         transcript: String,
         forceLanguage: Language?,
-        existingTags: List<String>,
     ): Note? {
         val parsed =
             when (val r = parser.parse(raw)) {
                 is DomainResult.Success -> r.value
                 is DomainResult.Failure -> return null
             }
-        return buildStructuredNote(parsed, transcript, forceLanguage, existingTags)
+        return buildStructuredNote(parsed, transcript, forceLanguage)
     }
 
     /**
@@ -195,8 +194,9 @@ class StructureNoteUseCaseImpl(
      *
      *  1. `RelativeDateTimeResolver` overrides Gemma's `iso_resolved` on simple
      *     multilingual relative expressions ("stasera", "tonight", "domani sera"…).
-     *  2. `TagValidator` strips tags that have no anchor in the transcript or in
-     *     the user's prior corpus — kills hallucinated tags.
+     *  2. `TagValidator` strips tags that have no anchor in the transcript —
+     *     kills hallucinated tags (corpus consistency is handled upstream in
+     *     the prompt's EXISTING_TAGS, not here).
      *  3. `MarkdownBodyFormatter` enforces line breaks before checkboxes/bullets
      *     and collapses excess blank lines.
      *  4. Title sanitization strips trailing punctuation and caps length.
@@ -209,7 +209,6 @@ class StructureNoteUseCaseImpl(
         s: StructuredNote,
         transcript: String,
         forceLanguage: Language?,
-        existingTags: List<String>,
     ): Note {
         val now = Instant.now(clock)
         val resolvedLanguage =
@@ -229,9 +228,11 @@ class StructureNoteUseCaseImpl(
                 .filter { it.surfaceForm.isJunkDateSurface().not() }
                 .map { resolveMention(it, s.languageBcp47, now) }
 
-        // 2. Tags: hallucination guard against the transcript + prior corpus.
+        // 2. Tags: hallucination guard against the transcript. The prior corpus
+        //    steers tag *generation* upstream in the prompt (EXISTING_TAGS, ADR 0012);
+        //    this downstream guard is a pure backstop and does not re-consult it.
         val rawTags = s.tags.mapNotNull(Tag::normalize).distinct()
-        val validatedTags = TagValidator.validate(rawTags, transcript, existingTags)
+        val validatedTags = TagValidator.validate(rawTags, transcript)
 
         // 4. Title: strip trailing punctuation that the model occasionally adds
         //    ("Riunione con Marco." or "Domani?"), then cap. (Computed before the

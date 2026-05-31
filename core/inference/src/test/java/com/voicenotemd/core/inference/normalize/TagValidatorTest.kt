@@ -26,7 +26,7 @@ class TagValidatorTest {
     fun `tag literally present in transcript is kept`() {
         val transcript = "Riunione con Marco per il progetto."
         val tags = listOfTags("riunione")
-        val out = TagValidator.validate(tags, transcript, emptyList())
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("riunione")
     }
 
@@ -34,7 +34,7 @@ class TagValidatorTest {
     fun `tag matched case-insensitively is kept`() {
         val transcript = "Stiamo lavorando su Lighthouse questa settimana."
         val tags = listOfTags("lighthouse")
-        val out = TagValidator.validate(tags, transcript, emptyList())
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("lighthouse")
     }
 
@@ -42,7 +42,7 @@ class TagValidatorTest {
     fun `multi-word kebab tag whose part appears as word in transcript is kept`() {
         val transcript = "Idea per l'app: aggiungere un widget."
         val tags = listOfTags("app-development")
-        val out = TagValidator.validate(tags, transcript, listOf("app-development"))
+        val out = TagValidator.validate(tags, transcript)
         // "app" appears as a standalone word (after the apostrophe boundary).
         assertThat(out.map { it.value }).containsExactly("app-development")
     }
@@ -53,7 +53,7 @@ class TagValidatorTest {
         // no transcript anchor → stripped under the strict ≤3-char rule.
         val transcript = "Sync con Sarah sul roadmap del prossimo quarter."
         val tags = listOfTags("rag")
-        val out = TagValidator.validate(tags, transcript, listOf("rag", "lavoro"))
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out).isEmpty()
     }
 
@@ -65,7 +65,7 @@ class TagValidatorTest {
         // having tag arrays that aren't 75% empty.
         val transcript = "Pensieri sul significato della vita."
         val tags = listOfTags("filosofia")
-        val out = TagValidator.validate(tags, transcript, emptyList())
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("filosofia")
     }
 
@@ -73,7 +73,7 @@ class TagValidatorTest {
     fun `mixed valid and invalid tags — short hallucination stripped, others kept`() {
         val transcript = "Riunione con Marco per Lighthouse."
         val tags = listOfTags("riunione", "rag", "lighthouse", "fantasia")
-        val out = TagValidator.validate(tags, transcript, listOf("rag", "fantasia"))
+        val out = TagValidator.validate(tags, transcript)
         // "riunione" and "lighthouse" anchor as words. "fantasia" passes by
         // the ≥4-char trust rule. Only "rag" (short, no anchor) is stripped.
         assertThat(out.map { it.value })
@@ -84,13 +84,13 @@ class TagValidatorTest {
     fun `duplicate tags are deduplicated`() {
         val transcript = "Riunione con il team."
         val tags = listOfTags("riunione", "riunione")
-        val out = TagValidator.validate(tags, transcript, emptyList())
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("riunione")
     }
 
     @Test
     fun `empty tags list returns empty`() {
-        val out = TagValidator.validate(emptyList(), "transcript qualsiasi", emptyList())
+        val out = TagValidator.validate(emptyList(), "transcript qualsiasi")
         assertThat(out).isEmpty()
     }
 
@@ -100,7 +100,7 @@ class TagValidatorTest {
         // "research" doesn't appear in the transcript. Short multi-part fails.
         val transcript = "Sto andando a casa."
         val tags = listOfTags("ai-research")
-        val out = TagValidator.validate(tags, transcript, emptyList())
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out).isEmpty()
     }
 
@@ -108,7 +108,7 @@ class TagValidatorTest {
     fun `multi-part tag with at least one part 3plus chars matching transcript is kept`() {
         val transcript = "Sto facendo research sull'AI generativa."
         val tags = listOfTags("ai-research")
-        val out = TagValidator.validate(tags, transcript, emptyList())
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("ai-research")
     }
 
@@ -116,7 +116,7 @@ class TagValidatorTest {
     fun `short mono-part tag matched literally is kept`() {
         val transcript = "Ottimizzando il SEO della pagina."
         val tags = listOfTags("seo")
-        val out = TagValidator.validate(tags, transcript, listOf("seo"))
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("seo")
     }
 
@@ -128,7 +128,7 @@ class TagValidatorTest {
         // because "app" substring-matched inside "appuntamento".
         val transcript = "Riunione con Marco. Poi appuntamento dal dentista."
         val tags = listOfTags("app-development")
-        val out = TagValidator.validate(tags, transcript, listOf("app-development"))
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out).isEmpty()
     }
 
@@ -136,7 +136,7 @@ class TagValidatorTest {
     fun `short tag does NOT match as substring inside longer word — english`() {
         val transcript = "The apple pie was great. Will share the recipe."
         val tags = listOfTags("app")
-        val out = TagValidator.validate(tags, transcript, listOf("app"))
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out).isEmpty()
     }
 
@@ -144,7 +144,7 @@ class TagValidatorTest {
     fun `short tag does NOT match as substring inside longer word — french`() {
         val transcript = "Une application intéressante pour les randonneurs."
         val tags = listOfTags("app")
-        val out = TagValidator.validate(tags, transcript, listOf("app"))
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out).isEmpty()
     }
 
@@ -152,7 +152,7 @@ class TagValidatorTest {
     fun `short tag does NOT match as substring inside longer word — spanish`() {
         val transcript = "Voy a apoyar la propuesta."
         val tags = listOfTags("app")
-        val out = TagValidator.validate(tags, transcript, listOf("app"))
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out).isEmpty()
     }
 
@@ -161,7 +161,7 @@ class TagValidatorTest {
         val transcript = "Idea per l'app: aggiungere widget."
         val tags = listOfTags("app")
         // "l'app" — apostrophe is a non-letter boundary, so "app" matches.
-        val out = TagValidator.validate(tags, transcript, listOf("app"))
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("app")
     }
 
@@ -169,7 +169,7 @@ class TagValidatorTest {
     fun `short tag DOES match as standalone word — english`() {
         val transcript = "Built an app for note-taking."
         val tags = listOfTags("app")
-        val out = TagValidator.validate(tags, transcript, listOf("app"))
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("app")
     }
 
@@ -179,7 +179,7 @@ class TagValidatorTest {
     fun `accent-folded short tag matches accented transcript — italian perche`() {
         val transcript = "Ho letto perché ho tempo."
         val tags = listOfTags("perche")
-        val out = TagValidator.validate(tags, transcript, listOf("perche"))
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("perche")
     }
 
@@ -187,7 +187,7 @@ class TagValidatorTest {
     fun `apostrophe acts as word boundary — italian elision`() {
         val transcript = "Mi è venuta l'idea di scrivere un libro."
         val tags = listOfTags("idea")
-        val out = TagValidator.validate(tags, transcript, listOf("idea"))
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("idea")
     }
 
@@ -195,7 +195,7 @@ class TagValidatorTest {
     fun `apostrophe acts as word boundary — english possessive`() {
         val transcript = "Sarah's review was very thorough."
         val tags = listOfTags("sarah")
-        val out = TagValidator.validate(tags, transcript, listOf("sarah"))
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("sarah")
     }
 
@@ -207,7 +207,7 @@ class TagValidatorTest {
         // new trust policy, the abstraction passes.
         val transcript = "Stanotte ho fatto un sogno strano. Mi sono svegliato confuso."
         val tags = listOfTags("sogni")
-        val out = TagValidator.validate(tags, transcript, emptyList())
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("sogni")
     }
 
@@ -215,7 +215,7 @@ class TagValidatorTest {
     fun `semantic abstraction tag is kept — italian lavoro for a work note`() {
         val transcript = "Sto lavorando tutto il giorno su questo progetto."
         val tags = listOfTags("lavoro")
-        val out = TagValidator.validate(tags, transcript, emptyList())
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("lavoro")
     }
 
@@ -225,7 +225,7 @@ class TagValidatorTest {
         // doesn't start "thinking". Under the trust rule it passes.
         val transcript = "I am thinking about the next project."
         val tags = listOfTags("thoughts")
-        val out = TagValidator.validate(tags, transcript, emptyList())
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("thoughts")
     }
 
@@ -235,7 +235,7 @@ class TagValidatorTest {
         // with "réflexion". Trust policy ignores the lexical gap.
         val transcript = "Une réflexion profonda sulla giornata."
         val tags = listOfTags("riflessione")
-        val out = TagValidator.validate(tags, transcript, emptyList())
+        val out = TagValidator.validate(tags, transcript)
         assertThat(out.map { it.value }).containsExactly("riflessione")
     }
 }
