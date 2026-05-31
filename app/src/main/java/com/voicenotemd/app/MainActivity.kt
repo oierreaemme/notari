@@ -18,7 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +31,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.voicenotemd.app.navigation.VoiceNoteNavHost
 import com.voicenotemd.core.common.repository.SettingsRepository
 import com.voicenotemd.core.design.theme.VoiceNoteMarkdownTheme
@@ -127,21 +130,39 @@ private fun VoiceNoteMarkdownAppContent(
             // a flash of notes followed by a lock prompt.
             val lockRequired by lockRequiredFlow.collectAsState(initial = null)
             var unlocked by remember { mutableStateOf(false) }
+            val lifecycleOwner = LocalLifecycleOwner.current
 
-            // Each emission re-evaluates: if the gate is OFF, we're unlocked by default;
-            // if it's ON and we haven't authenticated yet, we surface the prompt.
-            LaunchedEffect(lockRequired) {
-                when (lockRequired) {
-                    null -> Unit // still loading
-                    false -> unlocked = true
-                    true -> if (!unlocked) showPrompt { unlocked = true }
-                }
+            // Re-lock whenever the app leaves the foreground, and (re-)prompt when it comes
+            // back. This makes an enabled biometric gate protect the notes after the app has
+            // merely been backgrounded — not only on a cold start (ADR 0013: notes stay
+            // off-limits even on an unlocked device). No-op while the gate is off.
+            //
+            // ON_STOP fires when the app is no longer visible (home, recents, another app, a
+            // SAF picker, the share sheet). ON_START fires when it becomes visible again;
+            // addObserver also replays the current state to a freshly-added observer, so the
+            // first ON_START drives the initial prompt too — no separate launch needed. The
+            // system BiometricPrompt is a dialog fragment that does NOT stop the activity, so
+            // it cannot re-trigger itself.
+            DisposableEffect(lifecycleOwner, lockRequired) {
+                val observer =
+                    LifecycleEventObserver { _, event ->
+                        if (lockRequired == true) {
+                            when (event) {
+                                Lifecycle.Event.ON_STOP -> unlocked = false
+                                Lifecycle.Event.ON_START -> if (!unlocked) showPrompt { unlocked = true }
+                                else -> Unit
+                            }
+                        }
+                    }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
             when {
                 lockRequired == null -> Unit // splash window covers this
-                !unlocked -> LockedGate(onRetry = { showPrompt { unlocked = true } })
-                else -> VoiceNoteNavHost()
+                lockRequired == false -> VoiceNoteNavHost() // gate disabled
+                unlocked -> VoiceNoteNavHost()
+                else -> LockedGate(onRetry = { showPrompt { unlocked = true } })
             }
         }
     }
