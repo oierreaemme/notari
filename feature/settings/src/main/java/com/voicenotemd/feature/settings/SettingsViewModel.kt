@@ -11,11 +11,8 @@ import com.voicenotemd.core.common.repository.OnDeviceModelRepository
 import com.voicenotemd.core.common.repository.SettingsRepository
 import com.voicenotemd.core.common.repository.WhisperModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -46,11 +43,6 @@ class SettingsViewModel
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(SettingsUiState())
         val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
-
-        private val _uiEvents = MutableSharedFlow<Nothing>()
-
-        @Suppress("unused")
-        val uiEvents: SharedFlow<Nothing> = _uiEvents.asSharedFlow()
 
         private fun repositoryFor(model: ManagedModel): OnDeviceModelRepository =
             when (model) {
