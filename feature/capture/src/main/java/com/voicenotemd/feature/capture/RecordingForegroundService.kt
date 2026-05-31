@@ -58,9 +58,9 @@ class RecordingForegroundService : Service() {
             manager.createNotificationChannel(
                 NotificationChannel(
                     CHANNEL_ID,
-                    "Recording",
+                    getString(R.string.capture_notification_channel_name),
                     NotificationManager.IMPORTANCE_LOW,
-                ).apply { description = "Shown while Notari is capturing a voice note." },
+                ).apply { description = getString(R.string.capture_notification_channel_description) },
             )
         }
     }

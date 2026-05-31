@@ -1,7 +1,6 @@
 package com.voicenotemd.core.inference.schema
 
 import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import com.voicenotemd.core.common.domain.RawDateMention
 import com.voicenotemd.core.common.domain.StructuredNote
 import com.voicenotemd.core.common.result.DomainResult
@@ -79,7 +78,7 @@ class StructuredNoteParser(
      * Returns null if no JSON object can be located.
      */
     internal fun sanitize(raw: String): String? {
-        val noBom = raw.trim().removePrefix("").trim()
+        val noBom = raw.trim().removePrefix("\uFEFF").trim()
         val noFence =
             noBom
                 .removePrefix("```json").removePrefix("```")
@@ -184,10 +183,10 @@ class StructuredNoteParser(
     companion object {
         const val MAX_TITLE_LEN = 60
 
-        val defaultMoshi: Moshi =
-            Moshi.Builder()
-                .add(KotlinJsonAdapterFactory())
-                .build()
+        // Both schema classes use @JsonClass(generateAdapter = true), so Moshi resolves
+        // their KSP-generated adapters automatically — no reflective KotlinJsonAdapterFactory
+        // needed (it only added a runtime kotlin-reflect dependency).
+        val defaultMoshi: Moshi = Moshi.Builder().build()
 
         /**
          * One regex per supported tag name: `<thought>...</thought>`,

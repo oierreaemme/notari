@@ -55,12 +55,18 @@ class StructureNoteUseCaseImpl(
         forceLanguage: Language?,
         existingTags: List<String>,
     ): StructuringResult {
+        // Treat Language.Unknown as "no pin" (auto-detect). A non-null Unknown would
+        // otherwise wrap the prompt in a nonsensical "LANGUAGE LOCK … Unknown (und)"
+        // directive AND skip language detection in buildStructuredNote. This reaches us
+        // from NoteDetailViewModel.handleRestructure, which forwards the note's stored
+        // language verbatim — and a plain-text note's language can be Unknown.
+        val pinnedLanguage = forceLanguage?.takeIf { it != Language.Unknown }
         val cleaned = transcript.trim()
         if (cleaned.isEmpty()) {
             // Defensive: the capture flow guards against this, but we still want a sane
             // fallback rather than producing a blank note that confuses the user.
             return StructuringResult(
-                note = plainTextFallback(cleaned, forceLanguage),
+                note = plainTextFallback(cleaned, pinnedLanguage),
                 lastRawResponse = null,
             )
         }
@@ -114,7 +120,7 @@ class StructureNoteUseCaseImpl(
         // language title or foreign tags on a short note (real device, 2026-05-22).
         // With no pin, the base prompt's own "detect the language" rule applies.
         val effectiveBase: PromptTemplate =
-            forceLanguage?.let { LanguageScopedPromptTemplate(basePrompt, it) } ?: basePrompt
+            pinnedLanguage?.let { LanguageScopedPromptTemplate(basePrompt, it) } ?: basePrompt
         val stricterPrompt = StricterPromptTemplate(effectiveBase)
         val backend = session.backend()
         val pass1Budget = coldStartBudgetFor(cleaned, backend)
@@ -130,12 +136,12 @@ class StructureNoteUseCaseImpl(
                 pass1Outcome.exceptionOrNull()?.let { "exception: ${it.message}" }
                     ?: "timeout after ${pass1Budget}ms"
             return StructuringResult(
-                note = plainTextFallback(cleaned, forceLanguage),
+                note = plainTextFallback(cleaned, pinnedLanguage),
                 lastRawResponse = "Pass 1 failed ($reason)",
             )
         }
         lastRaw = pass1Raw
-        tryBuildStructuredNote(pass1Raw, cleaned, forceLanguage, existingTags)
+        tryBuildStructuredNote(pass1Raw, cleaned, pinnedLanguage, existingTags)
             ?.let { return StructuringResult(note = it, lastRawResponse = null) }
 
         // Pass 2 — stricter prompt. Engine is now warm so we drop the engine-load
@@ -152,7 +158,7 @@ class StructureNoteUseCaseImpl(
         val pass2Raw: String? = pass2Outcome.getOrNull()
         if (pass2Raw != null) {
             lastRaw = pass2Raw
-            tryBuildStructuredNote(pass2Raw, cleaned, forceLanguage, existingTags)
+            tryBuildStructuredNote(pass2Raw, cleaned, pinnedLanguage, existingTags)
                 ?.let { return StructuringResult(note = it, lastRawResponse = null) }
         } else {
             val pass2Reason =
@@ -164,7 +170,7 @@ class StructureNoteUseCaseImpl(
         // Both passes failed. Save the transcript verbatim so the user keeps the content,
         // and surface the last raw response so the UI can show what actually came back.
         return StructuringResult(
-            note = plainTextFallback(cleaned, forceLanguage),
+            note = plainTextFallback(cleaned, pinnedLanguage),
             lastRawResponse = lastRaw,
         )
     }

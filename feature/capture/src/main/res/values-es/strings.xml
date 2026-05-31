@@ -21,6 +21,8 @@
     <string name="capture_btn_save_note">Guardar nota</string>
     <string name="capture_notification_title">Notari está grabando</string>
     <string name="capture_notification_text">El audio permanece en este dispositivo.</string>
+    <string name="capture_notification_channel_name">Grabación</string>
+    <string name="capture_notification_channel_description">Se muestra mientras Notari graba una nota de voz.</string>
     <string name="capture_sheet_title_silent_mic">Micrófono silencioso</string>
     <string name="capture_sheet_title_dictation_language">Idioma de dictado</string>
     <string name="capture_structuring_your_note">Estructurando tu nota…</string>
