@@ -20,4 +20,7 @@
     <string name="notedetail_title_note">Note</string>
     <string name="notedetail_plain_text_banner">This note was saved as plain text — structuring didn\'t run.</string>
     <string name="notedetail_untitled">Untitled</string>
+    <string name="mentions_section_header">Datetime mentions</string>
+    <string name="mentions_unresolved">Left unresolved — reference too vague</string>
+    <string name="notedetail_created_prefix">Created %1$s</string>
 </resources>

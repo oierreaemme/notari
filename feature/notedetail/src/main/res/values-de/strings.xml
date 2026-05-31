@@ -20,4 +20,7 @@
     <string name="notedetail_title_note">Notiz</string>
     <string name="notedetail_plain_text_banner">Diese Notiz wurde als Nur-Text gespeichert — Strukturierung wurde nicht ausgeführt.</string>
     <string name="notedetail_untitled">Ohne Titel</string>
+    <string name="mentions_section_header">Datums- und Zeitangaben</string>
+    <string name="mentions_unresolved">Nicht aufgelöst — Angabe zu vage</string>
+    <string name="notedetail_created_prefix">Erstellt am %1$s</string>
 </resources>

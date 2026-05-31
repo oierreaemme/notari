@@ -39,4 +39,8 @@
     <string name="capture_setup_both_models">Import the transcription and structuring models to start. Until then, dictation won\'t produce text.</string>
     <string name="capture_setup_asr_only">Import a transcription model to dictate. Without it, recordings can\'t be turned into text.</string>
     <string name="capture_setup_gemma_only">Import the Gemma model for structured notes. Until then, notes are saved as plain text.</string>
+    <string name="mentions_section_header">Datetime mentions</string>
+    <string name="mentions_unresolved">Left unresolved — reference too vague</string>
+    <string name="capture_lang_offline_hint">If offline dictation in your language returns nothing, install the matching language pack from Android Settings → System → Languages → Speech → Offline.</string>
+    <string name="capture_debug_last_response">Last model response (debug)</string>
 </resources>

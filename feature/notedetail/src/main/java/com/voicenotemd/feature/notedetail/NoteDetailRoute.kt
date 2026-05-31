@@ -259,10 +259,10 @@ private fun NoteBody(
             )
             Text(
                 text =
-                    "Created " +
-                        note.createdAt
-                            .atZone(ZoneId.systemDefault())
-                            .format(DATE_FORMAT),
+                    stringResource(
+                        R.string.notedetail_created_prefix,
+                        note.createdAt.atZone(ZoneId.systemDefault()).format(DATE_FORMAT),
+                    ),
                 modifier = Modifier.padding(top = 4.dp),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -302,6 +302,8 @@ private fun NoteBody(
             MentionsSection(
                 mentions = note.mentions,
                 modifier = Modifier.padding(top = 20.dp),
+                header = stringResource(R.string.mentions_section_header),
+                unresolvedLabel = stringResource(R.string.mentions_unresolved),
             )
         }
     }

@@ -39,4 +39,8 @@
     <string name="capture_setup_both_models">Importiere die Transkriptions- und Strukturierungsmodelle, um zu beginnen. Bis dahin erzeugt das Diktat keinen Text.</string>
     <string name="capture_setup_asr_only">Importiere ein Transkriptionsmodell zum Diktieren. Ohne es können Aufnahmen nicht in Text umgewandelt werden.</string>
     <string name="capture_setup_gemma_only">Importiere das Gemma-Modell für strukturierte Notizen. Bis dahin werden Notizen als Nur-Text gespeichert.</string>
+    <string name="mentions_section_header">Datums- und Zeitangaben</string>
+    <string name="mentions_unresolved">Nicht aufgelöst — Angabe zu vage</string>
+    <string name="capture_lang_offline_hint">Wenn die Offline-Diktierfunktion in deiner Sprache nichts liefert, installiere das passende Sprachpaket über Android-Einstellungen → System → Sprachen → Spracheingabe → Offline.</string>
+    <string name="capture_debug_last_response">Letzte Modellantwort (Debug)</string>
 </resources>

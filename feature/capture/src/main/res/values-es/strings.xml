@@ -39,4 +39,8 @@
     <string name="capture_setup_both_models">Importa los modelos de transcripción y estructuración para empezar. Hasta entonces, el dictado no producirá texto.</string>
     <string name="capture_setup_asr_only">Importa un modelo de transcripción para dictar. Sin él, las grabaciones no pueden convertirse en texto.</string>
     <string name="capture_setup_gemma_only">Importa el modelo Gemma para notas estructuradas. Hasta entonces, las notas se guardan como texto sin formato.</string>
+    <string name="mentions_section_header">Menciones de fecha y hora</string>
+    <string name="mentions_unresolved">Sin resolver: referencia demasiado vaga</string>
+    <string name="capture_lang_offline_hint">Si el dictado sin conexión en tu idioma no devuelve nada, instala el paquete de idioma correspondiente desde Ajustes de Android → Sistema → Idiomas → Voz → Sin conexión.</string>
+    <string name="capture_debug_last_response">Última respuesta del modelo (debug)</string>
 </resources>

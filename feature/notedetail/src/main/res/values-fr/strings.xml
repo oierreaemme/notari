@@ -20,4 +20,7 @@
     <string name="notedetail_title_note">Note</string>
     <string name="notedetail_plain_text_banner">Cette note a été enregistrée en texte brut — la structuration n\'a pas été exécutée.</string>
     <string name="notedetail_untitled">Sans titre</string>
+    <string name="mentions_section_header">Mentions de date et heure</string>
+    <string name="mentions_unresolved">Non résolu — référence trop vague</string>
+    <string name="notedetail_created_prefix">Créé le %1$s</string>
 </resources>

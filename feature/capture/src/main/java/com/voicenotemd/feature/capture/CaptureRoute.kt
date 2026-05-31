@@ -350,10 +350,7 @@ private fun LanguagePickerSheet(
                 )
             }
             Text(
-                text =
-                    "If offline dictation in your language returns nothing, install " +
-                        "the matching language pack from Android Settings → System → " +
-                        "Languages → Speech → Offline.",
+                text = stringResource(R.string.capture_lang_offline_hint),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -719,13 +716,6 @@ private fun StructuringPane(
     }
 }
 
-/**
- * Vestigial estimator kept for the StructuringPane call-site signature. The
- * value isn't displayed anymore (see ADR 0014 / 2026-05-16 changelog) but
- * removing the parameter would touch every test and call site for no benefit.
- * Returns a generous fixed value so any downstream consumer that still reads
- * it doesn't crash on division-by-zero or similar.
- */
 @Composable
 private fun TranscribingPane(padding: PaddingValues) {
     // Shown while whisper.cpp is turning the captured PCM into text (ADR 0018 phase 2).
@@ -756,6 +746,13 @@ private fun TranscribingPane(padding: PaddingValues) {
     }
 }
 
+/**
+ * Vestigial estimator kept for the StructuringPane call-site signature. The
+ * value isn't displayed anymore (see ADR 0014 / 2026-05-16 changelog) but
+ * removing the parameter would touch every test and call site for no benefit.
+ * Returns a generous fixed value so any downstream consumer that still reads
+ * it doesn't crash on division-by-zero or similar.
+ */
 private fun estimateStructuringSeconds(transcriptLength: Int): Int =
     (15 + transcriptLength * 0.04).toInt().coerceIn(5, 150)
 
@@ -797,7 +794,7 @@ private fun ReviewPane(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            text = "Last model response (debug)",
+                            text = stringResource(R.string.capture_debug_last_response),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -862,6 +859,8 @@ private fun ReviewPane(
         MentionsSection(
             mentions = note.mentions,
             modifier = Modifier.padding(top = 16.dp),
+            header = stringResource(R.string.mentions_section_header),
+            unresolvedLabel = stringResource(R.string.mentions_unresolved),
         )
         Row(
             modifier =

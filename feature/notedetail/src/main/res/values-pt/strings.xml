@@ -20,4 +20,7 @@
     <string name="notedetail_title_note">Nota</string>
     <string name="notedetail_plain_text_banner">Esta nota foi salva como texto simples — a estruturação não foi executada.</string>
     <string name="notedetail_untitled">Sem título</string>
+    <string name="mentions_section_header">Menções de data e hora</string>
+    <string name="mentions_unresolved">Não resolvido — referência vaga demais</string>
+    <string name="notedetail_created_prefix">Criado em %1$s</string>
 </resources>

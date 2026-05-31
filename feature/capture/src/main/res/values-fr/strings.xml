@@ -39,4 +39,8 @@
     <string name="capture_setup_both_models">Importez les modèles de transcription et de structuration pour commencer. En attendant, la dictée ne produira pas de texte.</string>
     <string name="capture_setup_asr_only">Importez un modèle de transcription pour dicter. Sans lui, les enregistrements ne peuvent pas être convertis en texte.</string>
     <string name="capture_setup_gemma_only">Importez le modèle Gemma pour des notes structurées. En attendant, les notes sont enregistrées en texte brut.</string>
+    <string name="mentions_section_header">Mentions de date et heure</string>
+    <string name="mentions_unresolved">Non résolu — référence trop vague</string>
+    <string name="capture_lang_offline_hint">Si la dictée hors ligne dans votre langue ne renvoie rien, installez le pack de langue correspondant depuis Paramètres Android → Système → Langues → Saisie vocale → Hors ligne.</string>
+    <string name="capture_debug_last_response">Dernière réponse du modèle (débogage)</string>
 </resources>

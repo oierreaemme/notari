@@ -39,4 +39,8 @@
     <string name="capture_setup_both_models">Importe os modelos de transcrição e estruturação para começar. Até lá, o ditado não produzirá texto.</string>
     <string name="capture_setup_asr_only">Importe um modelo de transcrição para ditar. Sem ele, as gravações não podem ser convertidas em texto.</string>
     <string name="capture_setup_gemma_only">Importe o modelo Gemma para notas estruturadas. Até lá, as notas são salvas como texto simples.</string>
+    <string name="mentions_section_header">Menções de data e hora</string>
+    <string name="mentions_unresolved">Não resolvido — referência vaga demais</string>
+    <string name="capture_lang_offline_hint">Se o ditado offline no seu idioma não retornar nada, instale o pacote de idioma correspondente em Configurações do Android → Sistema → Idiomas → Voz → Offline.</string>
+    <string name="capture_debug_last_response">Última resposta do modelo (depuração)</string>
 </resources>
