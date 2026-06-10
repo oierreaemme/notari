@@ -57,6 +57,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voicenotemd.core.common.domain.Note
 import com.voicenotemd.core.common.domain.Tag
+import androidx.documentfile.provider.DocumentFile
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -81,6 +82,29 @@ fun NotesRoute(
             viewModel.exportToZip { context.contentResolver.openOutputStream(uri) }
         }
 
+    // Folder (Obsidian vault) export: the user picks a directory via SAF and every note
+    // lands as a frontmattered .md the vault indexes natively. Deterministic filenames +
+    // delete-then-create make a re-export update files in place instead of duplicating.
+    val folderExportLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocumentTree(),
+        ) { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            val dir = DocumentFile.fromTreeUri(context, uri)
+            viewModel.exportToFolder { filename, content ->
+                if (dir == null || !dir.canWrite()) return@exportToFolder false
+                runCatching {
+                    dir.findFile(filename)?.delete()
+                    val file =
+                        dir.createFile("text/markdown", filename)
+                            ?: return@exportToFolder false
+                    context.contentResolver.openOutputStream(file.uri)?.use { out ->
+                        out.write(content.toByteArray(Charsets.UTF_8))
+                    } != null
+                }.getOrDefault(false)
+            }
+        }
+
     LaunchedEffect(viewModel.uiEvents) {
         viewModel.uiEvents.collect { event ->
             when (event) {
@@ -91,6 +115,7 @@ fun NotesRoute(
                         )
                     exportLauncher.launch("VoiceNotesExport_$date.zip")
                 }
+                is NotesUiEvent.TriggerFolderPicker -> folderExportLauncher.launch(null)
                 is NotesUiEvent.ExportCompleted -> snackbarHost.showSnackbar(event.message)
                 is NotesUiEvent.SelectionDeleted -> {
                     val msg =
@@ -158,6 +183,16 @@ internal fun NotesScreen(
                     }
                 },
                 actions = {
+                    if (!state.isSelectionMode && state.notes.isNotEmpty()) {
+                        // Export the whole collection to a folder (Obsidian vault flow).
+                        // In selection mode the selection-scoped exports take over below.
+                        IconButton(onClick = { onIntent(NotesUiIntent.RequestFolderExport) }) {
+                            Icon(
+                                Icons.Outlined.Download,
+                                contentDescription = stringResource(R.string.notes_cd_export_all_folder),
+                            )
+                        }
+                    }
                     if (state.isSelectionMode) {
                         IconButton(onClick = { onIntent(NotesUiIntent.SelectAll) }) {
                             Icon(

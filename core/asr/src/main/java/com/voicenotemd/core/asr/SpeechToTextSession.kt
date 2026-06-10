@@ -42,6 +42,18 @@ interface SpeechToTextSession {
     suspend fun stop(): String
 
     /**
+     * Abandon the in-progress recording WITHOUT transcribing. Idempotent.
+     *
+     * Contract (ADR 0002 / ADR 0027): the implementation MUST stop capture, zero every
+     * internal audio buffer, and drop the references before returning. This is the path
+     * for user-initiated cancels and ViewModel teardown — unlike [stop] it never feeds
+     * the captured PCM to the ASR engine, so discarded audio is never processed.
+     *
+     * Default: no-op, for implementations that hold no audio between chunks.
+     */
+    suspend fun discard() {}
+
+    /**
      * A real-time stream of the audio RMS (Root Mean Square) level in decibels.
      * Exposed independently so UI can animate waveforms during [start].
      * Resets to 0.0f when idle.
@@ -64,6 +76,17 @@ interface SpeechToTextSession {
      */
     val audioReady: Flow<Boolean>
         get() = flowOf(true)
+
+    /**
+     * Milliseconds of audio captured so far in the current session. Resets to 0 at
+     * [start]. With batch ASR there is no live transcript, so duration is the only
+     * honest "how long is this note going to be" signal the UI can show advisories on
+     * (the transcript-length threshold went dead with the whisper migration — ADR 0018).
+     *
+     * Default: constant 0 for implementations that don't track it.
+     */
+    val capturedDurationMs: Flow<Long>
+        get() = flowOf(0L)
 }
 
 /**

@@ -14,6 +14,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,10 +26,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Notes
@@ -67,6 +71,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -76,6 +81,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voicenotemd.core.common.domain.Language
 import com.voicenotemd.core.common.domain.Note
+import com.voicenotemd.core.design.components.MarkdownText
 import com.voicenotemd.core.design.components.MentionsSection
 import kotlinx.coroutines.delay
 
@@ -97,6 +103,8 @@ fun CaptureRoute(
     val snackbarHost = remember { SnackbarHostState() }
     val context = LocalContext.current
     val fallbackMessage = stringResource(R.string.capture_fallback_snackbar)
+    val backgroundStructuringMessage = stringResource(R.string.capture_saved_structuring_background)
+    val cpuAdvisoryMessage = stringResource(R.string.capture_cpu_advisory)
 
     val permissionLauncher =
         rememberLauncherForActivityResult(
@@ -131,6 +139,12 @@ fun CaptureRoute(
                 CaptureUiEvent.StructuringFellBack -> {
                     snackbarHost.showSnackbar(fallbackMessage)
                 }
+                CaptureUiEvent.StructuringContinuesInBackground -> {
+                    snackbarHost.showSnackbar(backgroundStructuringMessage)
+                }
+                CaptureUiEvent.CpuFallbackAdvisory -> {
+                    snackbarHost.showSnackbar(cpuAdvisoryMessage)
+                }
             }
         }
     }
@@ -153,30 +167,21 @@ fun CaptureRoute(
         onPauseOrDispose { /* no cleanup needed — warm-up is fire-and-forget */ }
     }
 
-    // Keep capture alive while the screen is off / the app is backgrounded (hands-free,
-    // in-car use): a microphone foreground service holds the process and background mic
-    // access. Stays alive through Preparing, Recording AND Transcribing — Preparing covers
-    // the AudioRecord warm-up window (~700-1000 ms), so the FGS is already up by the time
-    // the user actually starts dictating. Without it, the OS could (in theory) kill the
-    // process mid-warm-up; including it also avoids a momentary "no service" flicker
-    // visible in the notification shade during cold-start. See ADR 0018.
+    // The microphone foreground service itself is started/stopped by the ViewModel
+    // (RecordingKeepAlive — it follows the phase state machine, so it also stops when
+    // capture ends while this screen is NOT composed; review 2026-06-10 #10). The
+    // composition only handles the UI-side concern left: asking for POST_NOTIFICATIONS
+    // on Android 13+ so the "recording" notification is visible (recording works
+    // regardless if denied).
     LaunchedEffect(state.phase) {
-        val captureActive =
-            state.phase == CaptureUiState.Phase.Preparing ||
-                state.phase == CaptureUiState.Phase.Recording ||
-                state.phase == CaptureUiState.Phase.Transcribing
-        if (captureActive) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.POST_NOTIFICATIONS,
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-            RecordingForegroundService.start(context)
-        } else {
-            RecordingForegroundService.stop(context)
+        if (state.phase.isCaptureActive &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
@@ -234,6 +239,7 @@ internal fun CaptureScreen(
                     padding = padding,
                     startedAtMs = state.structuringStartedAtMs,
                     estimatedSeconds = estimateStructuringSeconds(state.partialTranscript.length),
+                    onIntent = onIntent,
                 )
             else ->
                 RecordingPane(
@@ -518,12 +524,16 @@ private fun RecordingPane(
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
-            // Long-note advisory: Gemma E2B starts to feel slow past ~2000 chars of
-            // transcript (≈ 3-4 min of dictation). Inference still completes within
+            // Long-note advisory: Gemma E2B starts to feel slow past ~3 minutes of
+            // dictation (≈ 2000 chars of transcript). Inference still completes within
             // the warm budget, but structuring quality degrades on context this long
             // because of the model's effective 2B-parameter size. The banner sets
             // expectations honestly instead of pretending nothing changed.
-            if (isRecording && state.partialTranscript.length > LONG_NOTE_CHAR_THRESHOLD) {
+            //
+            // Duration-based since the whisper migration (ADR 0018): batch mode has no
+            // live transcript, so the old `partialTranscript.length` check could never
+            // fire (review 2026-06-10).
+            if (isRecording && state.recordingDurationMs > LONG_NOTE_DURATION_MS) {
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(10.dp),
@@ -644,6 +654,7 @@ private fun StructuringPane(
     padding: PaddingValues,
     startedAtMs: Long?,
     @Suppress("UNUSED_PARAMETER") estimatedSeconds: Int,
+    onIntent: (CaptureUiIntent) -> Unit,
 ) {
     // Tick the elapsed counter every 500ms so the user has feedback that work is
     // actually progressing. Anchored to wall-clock `System.currentTimeMillis()`,
@@ -712,6 +723,22 @@ private fun StructuringPane(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
+            // ADR 0023 escape hatch: the user never has to wait. The note is saved as
+            // plain text immediately and the running inference becomes a background
+            // upgrade. (If the quick wait expires first, the VM takes this path on its
+            // own — this button just hands the same choice to the user right away.)
+            TextButton(
+                onClick = { onIntent(CaptureUiIntent.SaveAsPlainText) },
+                modifier = Modifier.padding(top = 20.dp),
+            ) {
+                Text(stringResource(R.string.capture_btn_save_as_text))
+            }
+            Text(
+                text = stringResource(R.string.capture_save_as_text_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
@@ -756,6 +783,7 @@ private fun TranscribingPane(padding: PaddingValues) {
 private fun estimateStructuringSeconds(transcriptLength: Int): Int =
     (15 + transcriptLength * 0.04).toInt().coerceIn(5, 150)
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ReviewPane(
     state: CaptureUiState,
@@ -820,39 +848,111 @@ private fun ReviewPane(
                         .padding(top = 8.dp),
             )
         }
-        OutlinedTextField(
-            value = note.bodyMarkdown,
-            onValueChange = { onIntent(CaptureUiIntent.EditBody(it)) },
-            label = { Text(stringResource(R.string.capture_label_body)) },
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp)
-                    .height(280.dp),
-        )
+        // Body: raw Markdown editing with an on-demand rendered preview. Markwon is
+        // render-only (see core.design.MarkdownText), so the toggle switches surfaces
+        // instead of trying to make the editor rich.
+        var showBodyPreview by remember { androidx.compose.runtime.mutableStateOf(false) }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        ) {
+            Box(modifier = Modifier.weight(1f))
+            TextButton(onClick = { showBodyPreview = !showBodyPreview }) {
+                Text(
+                    stringResource(
+                        if (showBodyPreview) R.string.capture_btn_edit_body else R.string.capture_btn_preview_body,
+                    ),
+                )
+            }
+        }
+        if (showBodyPreview) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                MarkdownText(
+                    markdown = note.bodyMarkdown,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(280.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(12.dp),
+                )
+            }
+        } else {
+            OutlinedTextField(
+                value = note.bodyMarkdown,
+                onValueChange = { onIntent(CaptureUiIntent.EditBody(it)) },
+                label = { Text(stringResource(R.string.capture_label_body)) },
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(280.dp),
+            )
+        }
+
+        // Tags — editable in review (review 2026-06-10 UX): remove via the ✕ on each
+        // chip, add via the field below. Normalization/dedupe live in the ViewModel.
         if (note.tags.isNotEmpty()) {
-            Row(
+            FlowRow(
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 note.tags.forEach { tag ->
                     Surface(
                         color = MaterialTheme.colorScheme.secondaryContainer,
                         shape = RoundedCornerShape(50),
                     ) {
-                        Text(
-                            text = "#${tag.value}",
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "#${tag.value}",
+                                modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                            IconButton(
+                                onClick = { onIntent(CaptureUiIntent.RemoveTag(tag.value)) },
+                                modifier = Modifier.size(28.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Close,
+                                    contentDescription =
+                                        stringResource(R.string.capture_cd_remove_tag, tag.value),
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
+        var newTag by remember { androidx.compose.runtime.mutableStateOf("") }
+        OutlinedTextField(
+            value = newTag,
+            onValueChange = { newTag = it },
+            label = { Text(stringResource(R.string.capture_label_add_tag)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions =
+                KeyboardActions(
+                    onDone = {
+                        if (newTag.isNotBlank()) {
+                            onIntent(CaptureUiIntent.AddTag(newTag))
+                            newTag = ""
+                        }
+                    },
+                ),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+        )
         // On-device temporal reasoning made visible: each chip shows the surface form
         // Gemma saw and the ISO timestamp it anchored to (or "unresolved" when the
         // reference was intentionally too vague to anchor).
@@ -922,6 +1022,6 @@ private fun LanguageChip(
 // Cap the debug raw-response display so a runaway generation doesn't blow up the UI.
 private const val MAX_DEBUG_RAW_CHARS = 4_000
 
-// Roughly 3-4 minutes of normal-pace dictation. Past this point we surface a soft
-// advisory about structuring latency + quality; see RecordingPane.
-private const val LONG_NOTE_CHAR_THRESHOLD = 2_000
+// Roughly 3 minutes of dictation ≈ 2000 chars of transcript. Past this point we surface
+// a soft advisory about structuring latency + quality; see RecordingPane.
+private const val LONG_NOTE_DURATION_MS = 180_000L

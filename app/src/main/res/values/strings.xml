@@ -7,4 +7,7 @@
     <string name="app_locked_subtitle">Verify with your fingerprint or face to continue.</string>
     <string name="app_biometric_unlock_title">Unlock Notari</string>
     <string name="app_biometric_unlock_subtitle">Your notes stay on this device. Verify it\'s you.</string>
+    <string name="app_shortcut_capture_short">Capture</string>
+    <string name="app_shortcut_capture_long">Capture a voice note</string>
+    <string name="app_tile_capture">Notari capture</string>
 </resources>

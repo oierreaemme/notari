@@ -7,6 +7,8 @@ import com.voicenotemd.core.asr.SpeechToTextSession
 import com.voicenotemd.core.asr.TranscriptChunk
 import com.voicenotemd.core.common.domain.Language
 import com.voicenotemd.core.common.domain.Note
+import com.voicenotemd.core.common.domain.Tag
+import com.voicenotemd.core.common.domain.TagUsage
 import com.voicenotemd.core.common.repository.GemmaModel
 import com.voicenotemd.core.common.repository.NoteRepository
 import com.voicenotemd.core.common.repository.OnDeviceModelRepository
@@ -15,22 +17,33 @@ import com.voicenotemd.core.common.repository.SettingsRepository
 import com.voicenotemd.core.common.repository.WhisperModel
 import com.voicenotemd.core.common.usecase.SaveNoteUseCase
 import com.voicenotemd.core.common.usecase.StructureNoteUseCase
+import com.voicenotemd.core.common.usecase.StructuringResult
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import java.time.Instant
 import java.util.Locale
+import java.util.UUID
 import javax.inject.Inject
 
 /**
@@ -56,6 +69,7 @@ class CaptureViewModel
         private val noteRepository: NoteRepository,
         @GemmaModel private val gemmaModelRepository: OnDeviceModelRepository,
         @WhisperModel private val whisperModelRepository: OnDeviceModelRepository,
+        private val recordingKeepAlive: RecordingKeepAlive,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         /**
@@ -77,21 +91,39 @@ class CaptureViewModel
         /** Live recording job. `null` whenever we're not recording. */
         private var recordingJob: Job? = null
 
+        /**
+         * In-flight teardown of an abandoned take ([cancelRecording] → `session.discard()`).
+         * [startRecording] awaits it before collecting a new session, so a delayed teardown
+         * can never release the new take's recorder or buffers (the cancel→restart race,
+         * review 2026-06-10 / ADR 0027). `discard()` never transcribes, so this join is
+         * bounded by the reader-thread join (~500 ms), not by whisper.
+         */
+        private var teardownJob: Job? = null
+
+        /**
+         * Live only while [structure] is inside its quick wait (ADR 0023): completing it
+         * makes the wait return immediately with "go background" — the "Save as text now"
+         * button's signal. Nulled (in a `finally`) the moment the wait is over, so a late
+         * tap is a no-op.
+         */
+        private var skipStructuringWait: CompletableDeferred<Unit>? = null
+
         private var lastToggleAtMs: Long = 0L
 
         /**
-         * Snapshot of the user's notes, used to derive the tag corpus passed to Gemma at
-         * structure time (see ADR 0012). We keep whole notes — not just a flat tag list —
-         * so we can scope the corpus to the active dictation language and avoid feeding
-         * Italian tags into an English note (ADR 0017: cross-language tag contamination
-         * was a source of mixed-language output on real devices, 2026-05-22).
+         * Snapshot of the user's tag corpus as (tag, language) pairs, used to build the
+         * EXISTING_TAGS prompt list at structure time (ADR 0012), scoped to the active
+         * dictation language (ADR 0017: cross-language tag contamination was a source of
+         * mixed-language output on real devices, 2026-05-22). Replaces the previous
+         * whole-notes snapshot — the structuring flow only ever read the tags, so keeping
+         * every note body in memory was pure overhead (review 2026-06-10 #13).
          *
          * `@Volatile` so the value written from the collector coroutine is visible to the
          * structuring coroutine when it reads. Empty list = no consistency pressure (first
          * note ever, or before the flow has emitted).
          */
         @Volatile
-        private var existingNotes: List<Note> = emptyList()
+        private var existingTagCorpus: List<TagUsage> = emptyList()
 
         /**
          * Tag corpus to pass to Gemma for a note in [forcedLanguage].
@@ -103,12 +135,11 @@ class CaptureViewModel
          * own "tags in the note's own language" rule is the guard in that case.
          */
         private fun tagCorpusFor(forcedLanguage: Language?): List<String> =
-            existingNotes
-                .let { notes ->
-                    if (forcedLanguage != null) notes.filter { it.language == forcedLanguage } else notes
+            existingTagCorpus
+                .let { corpus ->
+                    if (forcedLanguage != null) corpus.filter { it.language == forcedLanguage } else corpus
                 }
-                .flatMap { it.tags }
-                .map { it.value }
+                .map { it.tag.value }
                 .distinct()
 
         /**
@@ -131,8 +162,8 @@ class CaptureViewModel
             // can pass it to Gemma. Room's Flow emits on every change, so deletes and
             // edits are reflected without us reloading manually.
             viewModelScope.launch {
-                noteRepository.observeAll().collect { notes ->
-                    existingNotes = notes
+                noteRepository.observeTagCorpus().collect { corpus ->
+                    existingTagCorpus = corpus
                 }
             }
             // Watch both on-device models so the idle screen can nudge the user to import
@@ -148,6 +179,19 @@ class CaptureViewModel
                 gemmaModelRepository.observeStatus().collect { status ->
                     _uiState.update { it.copy(gemmaModelMissing = status == OnDeviceModelStatus.Missing) }
                 }
+            }
+            // Keep-alive (microphone FGS) follows the phase state machine, not the UI
+            // composition: capture can legitimately run while the capture screen is not
+            // composed (hands-free / screen off / user browsing notes), and the service
+            // must stop when capture ends regardless of what is on screen (#10,
+            // review 2026-06-10). distinctUntilChanged → one start per active window.
+            viewModelScope.launch {
+                _uiState
+                    .map { it.phase.isCaptureActive }
+                    .distinctUntilChanged()
+                    .collect { active ->
+                        if (active) recordingKeepAlive.start() else recordingKeepAlive.stop()
+                    }
             }
             // Fire-and-forget engine warm-up. The user typically takes a few seconds to
             // glance at the screen and tap mic; we use that window to load the ~1.5 GB
@@ -184,6 +228,11 @@ class CaptureViewModel
                 is CaptureUiIntent.PermissionResult -> handlePermissionResult(intent.granted)
                 is CaptureUiIntent.EditTitle -> updatePreview { it.copy(title = intent.title) }
                 is CaptureUiIntent.EditBody -> updatePreview { it.copy(bodyMarkdown = intent.body) }
+                is CaptureUiIntent.RemoveTag ->
+                    updatePreview { note ->
+                        note.copy(tags = note.tags.filterNot { it.value == intent.value })
+                    }
+                is CaptureUiIntent.AddTag -> handleAddTag(intent.value)
                 CaptureUiIntent.Save -> handleSave()
                 CaptureUiIntent.DiscardPreview -> handleDiscard()
                 CaptureUiIntent.DismissError ->
@@ -196,7 +245,20 @@ class CaptureViewModel
                 CaptureUiIntent.ToggleTextInput ->
                     _uiState.update { it.copy(showTextInput = !it.showTextInput) }
                 is CaptureUiIntent.SubmitText -> handleSubmitText(intent.text)
+                CaptureUiIntent.SaveAsPlainText -> handleSaveAsPlainText()
             }
+        }
+
+        /**
+         * "Save as text now" (ADR 0023): stop waiting for Gemma. Completing the skip
+         * signal resolves the quick wait in [structure] with `null`, which routes to
+         * [savePlainAndUpgradeInBackground] — the note is persisted immediately and the
+         * in-flight inference becomes the background upgrade. Outside Structuring (or
+         * after the wait already resolved) this is a no-op.
+         */
+        private fun handleSaveAsPlainText() {
+            if (_uiState.value.phase != CaptureUiState.Phase.Structuring) return
+            skipStructuringWait?.complete(Unit)
         }
 
         private fun handleSubmitText(text: String) {
@@ -275,18 +337,54 @@ class CaptureViewModel
                 it.copy(
                     phase = CaptureUiState.Phase.Preparing,
                     partialTranscript = "",
+                    recordingDurationMs = 0L,
                     structuredPreview = null,
                     structuringFailed = false,
                 )
             }
             recordingJob =
                 viewModelScope.launch {
+                    // Serialize against a still-running discard of the previous take: the
+                    // old session must have released the AudioRecord and zeroed its buffers
+                    // before we open a new one on the same SpeechToTextSession instance.
+                    teardownJob?.join()
+                    teardownJob = null
+
                     val language = _uiState.value.activeLanguage ?: Language.Unknown
 
                     // Collect RMS continuously while recording
                     launch {
                         speechToTextSession.rmsDb.collect { rms ->
                             _uiState.update { it.copy(rmsLevel = rms) }
+                        }
+                    }
+
+                    // Captured-audio duration: drives the long-note advisory (no live
+                    // transcript exists in batch mode, so duration is the only signal)
+                    // and the hard duration cap below.
+                    launch {
+                        speechToTextSession.capturedDurationMs.collect { ms ->
+                            _uiState.update { it.copy(recordingDurationMs = ms) }
+                            // Hard cap (review 2026-06-10 #12): PCM accumulates in RAM at
+                            // ~1.9 MB/min, and transcription temporarily needs ~4× that
+                            // (chunks + concatenated copy + whisper's float image). Past
+                            // 15 min the peak (~115 MB) starts flirting with the Java heap
+                            // limit next to the 1.5 GB native engine — and whisper on a
+                            // dictation that long is a poor experience anyway. Auto-stop
+                            // and transcribe what we have instead of risking an OOM that
+                            // would lose everything.
+                            if (ms >= MAX_RECORDING_DURATION_MS &&
+                                _uiState.value.phase == CaptureUiState.Phase.Recording
+                            ) {
+                                _uiState.update {
+                                    it.copy(
+                                        errorMessage =
+                                            "Maximum recording length reached — " +
+                                                "transcribing what was captured.",
+                                    )
+                                }
+                                stopRecordingAndStructure()
+                            }
                         }
                     }
 
@@ -334,10 +432,13 @@ class CaptureViewModel
          * Abandon the in-progress recording without structuring or saving anything.
          *
          * The UI is reset to Idle synchronously for instant feedback; the recognizer's
-         * OS-side resources are released in the background via [SpeechToTextSession.stop],
-         * whose returned transcript we deliberately discard. Cancelling [recordingJob]
-         * also tears down the `rmsDb` collector through structured concurrency. No audio
-         * ever reached disk (ADR 0002), so this is a genuine discard.
+         * OS-side resources are released and the PCM buffers are zeroed in the background
+         * via [SpeechToTextSession.discard] — which, unlike `stop()`, never runs the
+         * transcriber on the abandoned audio (review 2026-06-10: the old `stop()` path
+         * burned seconds of whisper CPU on audio we were about to throw away, and its
+         * delayed buffer-zeroing could wipe a NEW take's buffers). Cancelling
+         * [recordingJob] also tears down the `rmsDb` collector through structured
+         * concurrency. No audio ever reached disk (ADR 0002), so this is a genuine discard.
          *
          * No-op outside [CaptureUiState.Phase.Recording] / [CaptureUiState.Phase.Preparing]
          * so a stray Cancel after stop (e.g. during Structuring) can't wipe a note that's
@@ -356,9 +457,10 @@ class CaptureViewModel
                     isAppending = it.isAppending,
                 )
             }
-            viewModelScope.launch {
-                runCatching { speechToTextSession.stop() }
-            }
+            teardownJob =
+                viewModelScope.launch {
+                    runCatching { speechToTextSession.discard() }
+                }
         }
 
         private fun stopRecordingAndStructure() {
@@ -394,7 +496,8 @@ class CaptureViewModel
         }
 
         private suspend fun structure(transcript: String) {
-            if (transcript.isBlank()) {
+            val cleaned = transcript.trim()
+            if (cleaned.isBlank()) {
                 _uiState.update {
                     it.copy(
                         phase = CaptureUiState.Phase.Idle,
@@ -416,31 +519,162 @@ class CaptureViewModel
 
             val forcedLanguage = settingsRepository.observe().first().forcedLanguage
             // Resolve the working language. In "Auto" (no explicit pin) we fall back to the
-            // device locale rather than leaving the model to auto-detect: Android's
-            // SpeechRecognizer has no real language auto-detection, so it already transcribes
-            // in the device language. Steering the structuring prompt to that same language
-            // keeps title/tags/body consistent instead of the mixed-language output we saw on
-            // short notes (real device 2026-05-22). An explicit pick from the selector always
-            // overrides this. See ADR 0017.
+            // device locale rather than leaving the model to auto-detect — see ADR 0017.
             val effectiveLanguage = forcedLanguage ?: deviceLocaleLanguage()
-            // Pass the current tag corpus snapshot so Gemma is nudged to reuse an existing tag
-            // rather than coin a synonymous new one (ADR 0012), scoped to the working language
-            // so we don't feed cross-language tags (ADR 0017).
-            val result = structureNote(transcript, effectiveLanguage, tagCorpusFor(effectiveLanguage))
-            val note = result.note
 
-            _uiState.update {
-                it.copy(
-                    phase = CaptureUiState.Phase.Reviewing,
-                    structuredPreview = note,
-                    structuringFailed = !note.structured,
-                    lastInferenceRaw = result.lastRawResponse,
-                    structuringStartedAtMs = null,
+            // ADR 0023 middle step: Gemma runs OFF the user's critical path. We launch the
+            // structuring as its own job and wait at most QUICK_STRUCTURE_WAIT_MS (or until
+            // the user taps "Save as text now" — the `skip` deferred). Fast devices (warm
+            // GPU) finish inside the window and keep the synchronous Reviewing flow; slow
+            // ones (CPU fallback: 60-250 s budgets) fall through to an immediate plain-text
+            // save and a background upgrade, so the user never stares at the spinner for
+            // minutes. The async job is a child of viewModelScope, which survives in-app
+            // navigation (capture is the home back-stack entry).
+            val structuring: Deferred<StructuringResult> =
+                viewModelScope.async {
+                    // Tag corpus snapshot (ADR 0012), scoped to the working language (ADR 0017).
+                    structureNote(cleaned, effectiveLanguage, tagCorpusFor(effectiveLanguage))
+                }
+            val skip = CompletableDeferred<Unit>()
+            skipStructuringWait = skip
+            val quick: StructuringResult? =
+                try {
+                    withTimeoutOrNull(QUICK_STRUCTURE_WAIT_MS) {
+                        select<StructuringResult?> {
+                            structuring.onAwait { it }
+                            skip.onAwait { null }
+                        }
+                    }
+                } finally {
+                    skipStructuringWait = null
+                }
+
+            if (quick != null) {
+                maybeEmitCpuAdvisory(quick)
+                // Fast path — same behavior as the original synchronous flow.
+                _uiState.update {
+                    it.copy(
+                        phase = CaptureUiState.Phase.Reviewing,
+                        structuredPreview = quick.note,
+                        structuringFailed = !quick.note.structured,
+                        lastInferenceRaw = quick.lastRawResponse,
+                        structuringStartedAtMs = null,
+                    )
+                }
+                if (!quick.note.structured) {
+                    _uiEvents.emit(CaptureUiEvent.StructuringFellBack)
+                }
+                return
+            }
+
+            savePlainAndUpgradeInBackground(cleaned, effectiveLanguage, structuring)
+        }
+
+        /**
+         * ADR 0023 slow path: persist the transcript as a plain note RIGHT NOW (the user
+         * is free immediately), keep the in-flight [structuring] job running, and when it
+         * lands upgrade the note in place — but only if the user hasn't touched it in the
+         * meantime (concurrent-edit rule: an edited or already-structured body wins over
+         * the background result; the user's curation is never overwritten).
+         *
+         * Append mode is the exception: the appended note already mixes old and new
+         * content, so a structured version of just the new fragment cannot be merged
+         * safely. We append the plain text and drop the background result — the manual
+         * "Structure with AI" action in note detail remains the upgrade path there.
+         */
+        private suspend fun savePlainAndUpgradeInBackground(
+            transcript: String,
+            language: Language,
+            structuring: Deferred<StructuringResult>,
+        ) {
+            val now = Instant.now(clock)
+
+            if (appendId != null) {
+                val existing = noteRepository.observe(appendId).firstOrNull()
+                if (existing != null) {
+                    noteRepository.update(
+                        existing.copy(
+                            bodyMarkdown = existing.bodyMarkdown + "\n\n" + transcript,
+                            updatedAt = now,
+                        ),
+                    )
+                } else {
+                    saveNote(plainNote(transcript, language, now))
+                }
+                structuring.cancel()
+                finishPlainSave()
+                return
+            }
+
+            val plain = plainNote(transcript, language, now)
+            saveNote(plain)
+            finishPlainSave()
+
+            viewModelScope.launch {
+                val result = runCatching { structuring.await() }.getOrNull() ?: return@launch
+                maybeEmitCpuAdvisory(result)
+                // The model fell back to plain text itself: nothing to upgrade with.
+                if (!result.note.structured) return@launch
+                val current = noteRepository.observe(plain.id).firstOrNull() ?: return@launch
+                // Concurrent-edit rule: only upgrade a note that is still exactly the
+                // plain transcript we saved. Deleted → observe returned null above;
+                // edited or manually restructured → the user's version wins.
+                if (current.structured || current.bodyMarkdown.trim() != transcript) return@launch
+                noteRepository.update(
+                    result.note.copy(
+                        id = plain.id,
+                        createdAt = current.createdAt,
+                        updatedAt = Instant.now(clock),
+                    ),
                 )
             }
-            if (!note.structured) {
-                _uiEvents.emit(CaptureUiEvent.StructuringFellBack)
+        }
+
+        /**
+         * One-time-per-process CPU advisory (ADR 0016 UX follow-up): the first time a
+         * structuring result reports the CPU fallback path, tell the user why the app
+         * is slower on this hardware. Process-scoped on purpose — repeating it every
+         * note would be nagging, persisting it would hide a later GPU-driver fix.
+         */
+        private suspend fun maybeEmitCpuAdvisory(result: StructuringResult) {
+            if (!result.cpuFallback || cpuAdvisoryShownThisProcess) return
+            cpuAdvisoryShownThisProcess = true
+            _uiEvents.emit(CaptureUiEvent.CpuFallbackAdvisory)
+        }
+
+        /** Reset to a clean Idle capture screen and tell the user the note is safe. */
+        private suspend fun finishPlainSave() {
+            _uiState.update {
+                CaptureUiState(
+                    activeLanguage = it.activeLanguage,
+                    isAppending = it.isAppending,
+                )
             }
+            _uiEvents.emit(CaptureUiEvent.StructuringContinuesInBackground)
+        }
+
+        /** Mirror of the use case's plain-text fallback, for the immediate save (ADR 0023). */
+        private fun plainNote(
+            transcript: String,
+            language: Language,
+            now: Instant,
+        ): Note {
+            val firstLine =
+                transcript.lineSequence()
+                    .map(String::trim)
+                    .firstOrNull(String::isNotEmpty)
+                    .orEmpty()
+            return Note(
+                id = UUID.randomUUID().toString(),
+                title = firstLine.take(MAX_PLAIN_TITLE_LEN).ifEmpty { "Untitled note" },
+                bodyMarkdown = transcript,
+                tags = emptyList(),
+                mentions = emptyList(),
+                language = language,
+                createdAt = now,
+                updatedAt = now,
+                structured = false,
+            )
         }
 
         private fun handleSave() {
@@ -484,6 +718,14 @@ class CaptureViewModel
             }
         }
 
+        /** Normalize + dedupe before attaching: invalid or already-present tags are no-ops. */
+        private fun handleAddTag(raw: String) {
+            val tag = Tag.normalize(raw) ?: return
+            updatePreview { note ->
+                if (note.tags.any { it.value == tag.value }) note else note.copy(tags = note.tags + tag)
+            }
+        }
+
         private inline fun updatePreview(
             transform: (com.voicenotemd.core.common.domain.Note) -> com.voicenotemd.core.common.domain.Note,
         ) {
@@ -495,10 +737,28 @@ class CaptureViewModel
 
         override fun onCleared() {
             recordingJob?.cancel()
+            // The phase collector above dies with viewModelScope — stop the keep-alive
+            // directly so a VM death mid-capture can't leave the FGS notification up.
+            runCatching { recordingKeepAlive.stop() }
+            // viewModelScope is already cancelled when onCleared runs, so the discard has
+            // to ride its own short-lived scope. Without this, a VM death mid-recording
+            // left the full PCM un-zeroed in the heap indefinitely (ADR 0002 violation —
+            // review 2026-06-10). NonCancellable: this is a privacy-critical cleanup.
+            CoroutineScope(NonCancellable + Dispatchers.Default).launch {
+                runCatching { speechToTextSession.discard() }
+            }
             super.onCleared()
         }
 
         private companion object {
+            /**
+             * One-time-per-process latch for the CPU-fallback advisory. Companion (not
+             * instance) state so a recreated ViewModel doesn't re-show it within the
+             * same app run. Deliberately NOT persisted — see [maybeEmitCpuAdvisory].
+             */
+            @Volatile
+            private var cpuAdvisoryShownThisProcess = false
+
             /**
              * Safety timeout for the [CaptureUiState.Phase.Preparing] → [CaptureUiState.Phase.Recording]
              * transition. On a Pixel 6a the AudioRecord warm-up completes in ~700–1000 ms; this
@@ -508,5 +768,26 @@ class CaptureViewModel
              * on "Preparazione…" until the user finally made a noise.
              */
             const val PREPARING_TIMEOUT_MS = 1500L
+
+            /**
+             * Hard recording-length cap. 15 minutes of 16 kHz mono PCM ≈ 28.8 MB of
+             * chunks; transcription transiently adds the concatenated ShortArray copy
+             * (+28.8 MB) and whisper's normalized FloatArray (+57.6 MB) → ~115 MB peak,
+             * a safe ceiling next to the LLM engine. The cap fires an auto-stop that
+             * transcribes the captured audio (nothing is lost) and tells the user why.
+             */
+            const val MAX_RECORDING_DURATION_MS = 15 * 60 * 1000L
+
+            /**
+             * ADR 0023: how long the UI is willing to block on Gemma before saving the
+             * plain note and finishing the structuring in the background. 8 s covers the
+             * typical warm-GPU inference (fast devices keep the synchronous review flow)
+             * while capping the worst-case spinner time on CPU-fallback devices, where
+             * pass budgets legitimately reach minutes (ADR 0016).
+             */
+            const val QUICK_STRUCTURE_WAIT_MS = 8_000L
+
+            /** Same cap as the use case's plain-text fallback title. */
+            const val MAX_PLAIN_TITLE_LEN = 60
         }
     }

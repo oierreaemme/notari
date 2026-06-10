@@ -11,6 +11,19 @@ Status: Accepted
 > described here: opt-in, UX-only, defending device-shared access. At-rest
 > protection is now owned by ADR 0019, not by this lock.
 
+> **Update (2026-06-10): the gate is now an overlay, not a NavHost
+> replacement.** The original implementation swapped `VoiceNoteNavHost()` out
+> of composition while locked. Combined with the re-lock-on-ON_STOP behavior
+> (2026-05-31), engaging the gate destroyed the NavController and every
+> back-stack entry's ViewModel. Two real-device bugs followed: screen-off
+> mid-dictation discarded the recording in progress (CaptureViewModel
+> cleared), and the ZIP export's SAF picker — which stops the activity —
+> destroyed the ActivityResult callback, leaving a created-but-empty .zip.
+> The NavHost is now always composed; `LockedGate` sits on top as an opaque,
+> pointer-swallowing overlay. The threat model is unchanged (screen gate;
+> FLAG_SECURE covers Recents/screenshots; at-rest = ADR 0019), but in-flight
+> work now survives the lock engaging.
+
 ## Context
 
 Notes contain meeting decisions, half-formed ideas, personal reflections — the

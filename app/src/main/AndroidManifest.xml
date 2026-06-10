@@ -35,6 +35,23 @@
         tools:targetApi="33">
 
         <!--
+          REQUIRED FOR GPU INFERENCE (LiteRT-LM): on API 31+ an app can only dlopen
+          vendor native libraries it declares here. Without these two entries the
+          loader refuses libOpenCL.so, Backend.GPU() init fails inside ML Drift, and
+          the engine silently falls back to CPU — the dominant cause of 60-250 s
+          structuring budgets on the reference Pixel (ADR 0016; upstream LiteRT-LM
+          docs + issue #1860 confirm the requirement). `required="false"` keeps the
+          app installable on devices without OpenCL (those genuinely run on CPU).
+          No privacy impact: this only permits loading an on-device driver library.
+        -->
+        <uses-native-library
+            android:name="libvndksupport.so"
+            android:required="false" />
+        <uses-native-library
+            android:name="libOpenCL.so"
+            android:required="false" />
+
+        <!--
           Google datatransport ships with MediaPipe and would otherwise schedule
           background jobs that talk to Google servers. Rip every entry out at merge time.
           After the LiteRT-LM migration (ADR 0008) MediaPipe is no longer a direct
@@ -65,7 +82,27 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Launcher long-press shortcut to capture (time-to-mic, ADR 0029). -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
+
+        <!--
+          Quick Settings tile → capture screen (ADR 0029). BIND_QUICK_SETTINGS_TILE is a
+          signature permission held by the system, required for the tile contract; it
+          grants no network or data capability and does not affect the privacy pillar.
+        -->
+        <service
+            android:name=".CaptureTileService"
+            android:exported="true"
+            android:icon="@android:drawable/ic_btn_speak_now"
+            android:label="@string/app_tile_capture"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
     </application>
 

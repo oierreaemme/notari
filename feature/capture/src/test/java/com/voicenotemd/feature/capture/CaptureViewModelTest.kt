@@ -50,6 +50,7 @@ class CaptureViewModelTest {
     private val noteRepository: NoteRepository = mockk(relaxed = true)
     private val gemmaModelRepository: OnDeviceModelRepository = mockk(relaxed = true)
     private val whisperModelRepository: OnDeviceModelRepository = mockk(relaxed = true)
+    private val recordingKeepAlive: RecordingKeepAlive = mockk(relaxed = true)
 
     private var currentTime = 1000L
     private val fakeClock =
@@ -102,6 +103,7 @@ class CaptureViewModelTest {
             noteRepository,
             gemmaModelRepository,
             whisperModelRepository,
+            recordingKeepAlive,
             savedStateHandle,
         ).also { vm ->
             vm.clock = fakeClock
@@ -183,14 +185,17 @@ class CaptureViewModelTest {
             // Portiamo a Structuring forzatamente via un hack per il test: text input
             viewModel.onIntent(CaptureUiIntent.ToggleTextInput)
             viewModel.onIntent(CaptureUiIntent.SubmitText("Test transcript"))
-            testDispatcher.scheduler.advanceUntilIdle()
+            // ADR 0023: advance INSIDE the 8s quick-wait window — advanceUntilIdle would
+            // blow past it and legitimately land on the plain-saved Idle screen.
+            testDispatcher.scheduler.advanceTimeBy(1_000)
+            testDispatcher.scheduler.runCurrent()
 
             assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Structuring)
 
             // Ora proviamo a fare tap su record
             currentTime += 5000 // Ben oltre il debounce
             viewModel.onIntent(CaptureUiIntent.ToggleRecord)
-            testDispatcher.scheduler.advanceUntilIdle()
+            testDispatcher.scheduler.runCurrent()
 
             // La fase deve restare Structuring e non deve essere diventata Idle o AwaitingPermission
             assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Structuring)
@@ -337,6 +342,72 @@ class CaptureViewModelTest {
         }
 
     @Test
+    fun `cancel recording discards without transcribing - discard is called, stop is not`() =
+        runTest {
+            every { speechToTextSession.rmsDb } returns emptyFlow()
+            every { speechToTextSession.start(any()) } returns
+                flow {
+                    emit(TranscriptChunk("bozza", isFinal = false))
+                    awaitCancellation()
+                }
+
+            viewModel = createViewModel()
+            viewModel.onIntent(CaptureUiIntent.ToggleRecord)
+            viewModel.onIntent(CaptureUiIntent.PermissionResult(granted = true))
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Recording)
+
+            currentTime += 1000
+            viewModel.onIntent(CaptureUiIntent.CancelRecording)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // ADR 0027: abandoned audio must be zeroed via discard() and must NEVER be
+            // fed to the transcriber — stop() runs whisper on the captured PCM.
+            coVerify(exactly = 1) { speechToTextSession.discard() }
+            coVerify(exactly = 0) { speechToTextSession.stop() }
+        }
+
+    @Test
+    fun `restart after cancel waits for the previous discard to finish`() =
+        runTest {
+            every { speechToTextSession.rmsDb } returns emptyFlow()
+            every { speechToTextSession.start(any()) } returns
+                flow {
+                    emit(TranscriptChunk("", isFinal = false))
+                    awaitCancellation()
+                }
+            // Hold discard() open so we can observe the ordering: the new session's
+            // start() must not run while the old teardown is still in flight (the
+            // cancel→restart race that could wipe the new take's buffers, ADR 0027).
+            val discardGate = kotlinx.coroutines.CompletableDeferred<Unit>()
+            coEvery { speechToTextSession.discard() } coAnswers { discardGate.await() }
+
+            viewModel = createViewModel()
+            viewModel.onIntent(CaptureUiIntent.ToggleRecord)
+            viewModel.onIntent(CaptureUiIntent.PermissionResult(granted = true))
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Recording)
+
+            // Cancel, then immediately restart while discard() is still suspended.
+            currentTime += 1000
+            viewModel.onIntent(CaptureUiIntent.CancelRecording)
+            testDispatcher.scheduler.runCurrent()
+            currentTime += 1000
+            viewModel.onIntent(CaptureUiIntent.ToggleRecord)
+            viewModel.onIntent(CaptureUiIntent.PermissionResult(granted = true))
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // First start() (the cancelled take) has happened; the second must be gated.
+            io.mockk.verify(exactly = 1) { speechToTextSession.start(any()) }
+
+            // Teardown completes → the queued restart proceeds.
+            discardGate.complete(Unit)
+            testDispatcher.scheduler.advanceUntilIdle()
+            io.mockk.verify(exactly = 2) { speechToTextSession.start(any()) }
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Recording)
+        }
+
+    @Test
     fun `start recording lands in Preparing first and only moves to Recording once audio is ready`() =
         runTest {
             // Drive audioReady manually so we can observe the intermediate Preparing state.
@@ -396,6 +467,188 @@ class CaptureViewModelTest {
             // Back to a clean Idle screen, nothing structured.
             assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Idle)
             coVerify(exactly = 0) { structureNoteUseCase.invoke(any(), any(), any()) }
+        }
+
+    @Test
+    fun `keep-alive follows the phase machine - one start per take, stop on cancel`() =
+        runTest {
+            every { speechToTextSession.rmsDb } returns emptyFlow()
+            every { speechToTextSession.start(any()) } returns
+                flow {
+                    emit(TranscriptChunk("", isFinal = false))
+                    awaitCancellation()
+                }
+
+            viewModel = createViewModel()
+            testDispatcher.scheduler.advanceUntilIdle()
+            // Idle at init: the keep-alive must not be started.
+            io.mockk.verify(exactly = 0) { recordingKeepAlive.start() }
+
+            viewModel.onIntent(CaptureUiIntent.ToggleRecord)
+            viewModel.onIntent(CaptureUiIntent.PermissionResult(granted = true))
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Recording)
+            // Preparing → Recording is ONE active window (distinctUntilChanged): one start.
+            io.mockk.verify(exactly = 1) { recordingKeepAlive.start() }
+
+            currentTime += 1000
+            viewModel.onIntent(CaptureUiIntent.CancelRecording)
+            testDispatcher.scheduler.advanceUntilIdle()
+            // Initial Idle emission + the cancel: the keep-alive ends with the take.
+            io.mockk.verify(exactly = 2) { recordingKeepAlive.stop() }
+        }
+
+    @Test
+    fun `recording auto-stops and structures when the duration cap is reached`() =
+        runTest {
+            val duration = MutableStateFlow(0L)
+            every { speechToTextSession.rmsDb } returns emptyFlow()
+            every { speechToTextSession.capturedDurationMs } returns duration.asStateFlow()
+            every { speechToTextSession.start(any()) } returns
+                flow {
+                    emit(TranscriptChunk("", isFinal = false))
+                    awaitCancellation()
+                }
+            coEvery { speechToTextSession.stop() } returns "dettatura molto lunga"
+            val fakeResult =
+                com.voicenotemd.core.common.usecase.StructuringResult(
+                    note =
+                        Note(
+                            id = "capped",
+                            title = "Lunga",
+                            bodyMarkdown = "Corpo",
+                            tags = emptyList(),
+                            mentions = emptyList(),
+                            language = Language.Italian,
+                            createdAt = Instant.ofEpochMilli(currentTime),
+                            updatedAt = Instant.ofEpochMilli(currentTime),
+                            structured = true,
+                        ),
+                    lastRawResponse = null,
+                )
+            coEvery { structureNoteUseCase.invoke(any(), any(), any()) } returns fakeResult
+
+            viewModel = createViewModel()
+            viewModel.onIntent(CaptureUiIntent.ToggleRecord)
+            viewModel.onIntent(CaptureUiIntent.PermissionResult(granted = true))
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Recording)
+
+            // Cross the cap: the VM must auto-stop, transcribe what was captured, structure it.
+            duration.value = 15 * 60 * 1000L
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            coVerify(exactly = 1) { speechToTextSession.stop() }
+            coVerify(exactly = 1) {
+                structureNoteUseCase.invoke("dettatura molto lunga", any(), any())
+            }
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Reviewing)
+        }
+
+    @Test
+    fun `slow structuring saves plain immediately and upgrades the note in background`() =
+        runTest {
+            val structuredNote =
+                Note(
+                    id = "model-id",
+                    title = "Spesa",
+                    bodyMarkdown = "- [ ] latte",
+                    tags = emptyList(),
+                    mentions = emptyList(),
+                    language = Language.Italian,
+                    createdAt = Instant.ofEpochMilli(currentTime),
+                    updatedAt = Instant.ofEpochMilli(currentTime),
+                    structured = true,
+                )
+            // Gemma is slow (20s > the 8s quick wait), then succeeds.
+            coEvery { structureNoteUseCase.invoke(any(), any(), any()) } coAnswers {
+                kotlinx.coroutines.delay(20_000)
+                com.voicenotemd.core.common.usecase.StructuringResult(structuredNote, null)
+            }
+            val savedSlot = slot<Note>()
+            coEvery { saveNoteUseCase.invoke(capture(savedSlot)) } returns Unit
+            // The background upgrade re-reads the note: serve back exactly what was saved.
+            every { noteRepository.observe(any()) } answers { flowOf(savedSlot.captured) }
+
+            viewModel = createViewModel()
+            viewModel.onIntent(CaptureUiIntent.ToggleTextInput)
+            viewModel.onIntent(CaptureUiIntent.SubmitText("comprare il latte"))
+
+            // Quick wait expires → plain note saved, capture is free again.
+            testDispatcher.scheduler.advanceTimeBy(8_100)
+            testDispatcher.scheduler.runCurrent()
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Idle)
+            assertThat(savedSlot.captured.structured).isFalse()
+            assertThat(savedSlot.captured.bodyMarkdown).isEqualTo("comprare il latte")
+            assertThat(uiEvents).contains(CaptureUiEvent.StructuringContinuesInBackground)
+
+            // Gemma lands → the note is upgraded in place, same id, createdAt preserved.
+            testDispatcher.scheduler.advanceUntilIdle()
+            val updatedSlot = slot<Note>()
+            coVerify { noteRepository.update(capture(updatedSlot)) }
+            assertThat(updatedSlot.captured.id).isEqualTo(savedSlot.captured.id)
+            assertThat(updatedSlot.captured.structured).isTrue()
+            assertThat(updatedSlot.captured.bodyMarkdown).isEqualTo("- [ ] latte")
+            assertThat(updatedSlot.captured.createdAt).isEqualTo(savedSlot.captured.createdAt)
+        }
+
+    @Test
+    fun `background upgrade is dropped when the user edited the plain note meanwhile`() =
+        runTest {
+            val structuredNote =
+                Note(
+                    id = "model-id",
+                    title = "Spesa",
+                    bodyMarkdown = "- [ ] latte",
+                    tags = emptyList(),
+                    mentions = emptyList(),
+                    language = Language.Italian,
+                    createdAt = Instant.ofEpochMilli(currentTime),
+                    updatedAt = Instant.ofEpochMilli(currentTime),
+                    structured = true,
+                )
+            coEvery { structureNoteUseCase.invoke(any(), any(), any()) } coAnswers {
+                kotlinx.coroutines.delay(20_000)
+                com.voicenotemd.core.common.usecase.StructuringResult(structuredNote, null)
+            }
+            val savedSlot = slot<Note>()
+            coEvery { saveNoteUseCase.invoke(capture(savedSlot)) } returns Unit
+            // By the time the upgrade lands, the user has edited the body.
+            every { noteRepository.observe(any()) } answers {
+                flowOf(savedSlot.captured.copy(bodyMarkdown = "comprare il latte E IL PANE"))
+            }
+
+            viewModel = createViewModel()
+            viewModel.onIntent(CaptureUiIntent.ToggleTextInput)
+            viewModel.onIntent(CaptureUiIntent.SubmitText("comprare il latte"))
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Concurrent-edit rule: the user's version wins; no overwrite.
+            coVerify(exactly = 0) { noteRepository.update(any()) }
+        }
+
+    @Test
+    fun `save as text now skips the wait and saves the plain note immediately`() =
+        runTest {
+            coEvery { structureNoteUseCase.invoke(any(), any(), any()) } coAnswers { awaitCancellation() }
+            val savedSlot = slot<Note>()
+            coEvery { saveNoteUseCase.invoke(capture(savedSlot)) } returns Unit
+
+            viewModel = createViewModel()
+            viewModel.onIntent(CaptureUiIntent.ToggleTextInput)
+            viewModel.onIntent(CaptureUiIntent.SubmitText("pensiero al volo"))
+            testDispatcher.scheduler.advanceTimeBy(1_000)
+            testDispatcher.scheduler.runCurrent()
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Structuring)
+
+            // The user refuses to wait: well before the 8s window expires.
+            viewModel.onIntent(CaptureUiIntent.SaveAsPlainText)
+            testDispatcher.scheduler.runCurrent()
+
+            assertThat(viewModel.uiState.value.phase).isEqualTo(CaptureUiState.Phase.Idle)
+            assertThat(savedSlot.captured.bodyMarkdown).isEqualTo("pensiero al volo")
+            assertThat(savedSlot.captured.structured).isFalse()
+            assertThat(uiEvents).contains(CaptureUiEvent.StructuringContinuesInBackground)
         }
 
     @Test

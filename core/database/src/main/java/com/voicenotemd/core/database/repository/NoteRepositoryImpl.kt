@@ -1,7 +1,9 @@
 package com.voicenotemd.core.database.repository
 
+import com.voicenotemd.core.common.domain.Language
 import com.voicenotemd.core.common.domain.Note
 import com.voicenotemd.core.common.domain.Tag
+import com.voicenotemd.core.common.domain.TagUsage
 import com.voicenotemd.core.common.repository.NoteRepository
 import com.voicenotemd.core.database.dao.NoteDao
 import com.voicenotemd.core.database.mapper.toDomain
@@ -26,6 +28,15 @@ class NoteRepositoryImpl
 
         override fun observeAllTags(): Flow<List<Tag>> =
             dao.observeAllTagValues().map { values -> values.mapNotNull(Tag.Companion::normalize) }
+
+        override fun observeTagCorpus(): Flow<List<TagUsage>> =
+            dao.observeTagValuesWithLanguage().map { rows ->
+                rows.mapNotNull { row ->
+                    Tag.normalize(row.value)?.let { tag ->
+                        TagUsage(tag = tag, language = Language.fromBcp47(row.language))
+                    }
+                }
+            }
 
         override suspend fun insert(note: Note) {
             dao.upsertNoteWithRelations(

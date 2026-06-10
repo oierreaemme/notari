@@ -69,6 +69,90 @@ class StructureNoteUseCaseImplTest {
         }
 
     @Test
+    fun `mention backstop fires when the model emits none but the transcript names a day`() =
+        runTest {
+            val session =
+                ScriptedSession(
+                    listOf(
+                        """{"language":"it","title":"Riepilogo per Luca","tags":["lavoro"],"mentions":[],"body_markdown":"- [ ] Mandare il riepilogo a Luca entro venerdì"}""",
+                    ),
+                )
+            val note = useCase(session).invoke("devo mandare il riepilogo a Luca entro venerdì").note
+
+            // The model dropped the mention; the deterministic scanner recovers it from
+            // the transcript (review 2026-06-10). Surface form is a literal substring.
+            assertThat(note.mentions).hasSize(1)
+            assertThat(note.mentions.first().surfaceForm).isEqualTo("venerdì")
+            assertThat(note.mentions.first().resolved).isNotNull()
+        }
+
+    @Test
+    fun `a bare-number mention surface is junk and gets dropped`() =
+        runTest {
+            val session =
+                ScriptedSession(
+                    listOf(
+                        """{"language":"it","title":"Scadenza","tags":["lavoro"],"mentions":[{"surface_form":"2","iso_resolved":null}],"body_markdown":"Non ricordo se la scadenza è il 2 o il 21."}""",
+                    ),
+                )
+            // The transcript carries no scannable future reference either, so the
+            // backstop must stay silent too: zero chips, not a junk "2" chip.
+            val note = useCase(session).invoke("non ricordo se la scadenza è il 2 o il 21").note
+
+            assertThat(note.mentions).isEmpty()
+        }
+
+    @Test
+    fun `an unresolved compound mention is resolved by scanning its own surface`() =
+        runTest {
+            val session =
+                ScriptedSession(
+                    listOf(
+                        """{"language":"it","title":"Dentista","tags":["salute"],"mentions":[{"surface_form":"domani alle 15","iso_resolved":null}],"body_markdown":"- [ ] Richiamare il dentista"}""",
+                    ),
+                )
+            val note = useCase(session).invoke("domani alle 15 devo richiamare il dentista").note
+
+            // Real-device 2026-06-10: the model emitted the surface but left iso null.
+            // The scanner covers the WHOLE surface ("domani" + "alle 15" merge) so the
+            // deterministic resolution is accepted.
+            assertThat(note.mentions).hasSize(1)
+            assertThat(note.mentions.first().surfaceForm).isEqualTo("domani alle 15")
+            assertThat(note.mentions.first().resolved).isNotNull()
+        }
+
+    @Test
+    fun `mention backstop stays silent on conversational narration`() =
+        runTest {
+            val session =
+                ScriptedSession(
+                    listOf(
+                        """{"language":"it","title":"Riunione","tags":["lavoro"],"mentions":[],"body_markdown":"Oggi la riunione è andata bene."}""",
+                    ),
+                )
+            val note = useCase(session).invoke("oggi la riunione è andata bene").note
+
+            // "oggi" is narration, not a schedulable reference — no junk chips.
+            assertThat(note.mentions).isEmpty()
+        }
+
+    @Test
+    fun `a plain first body line that echoes the title is stripped`() =
+        runTest {
+            val session =
+                ScriptedSession(
+                    listOf(
+                        """{"language":"it","title":"Lista della spesa","tags":["personale"],"mentions":[],"body_markdown":"Lista della spesa.\n\n- [ ] Comprare pane\n- [ ] Comprare latte"}""",
+                    ),
+                )
+            val note = useCase(session).invoke("lista della spesa pane e latte").note
+
+            // The echo duplicated the title field (real-device 2026-06-10); the items survive.
+            assertThat(note.bodyMarkdown).startsWith("- [ ] Comprare pane")
+            assertThat(note.bodyMarkdown).contains("- [ ] Comprare latte")
+        }
+
+    @Test
     fun `should retry once with stricter prompt when given prose-wrapped output then succeed`() =
         runTest {
             val session =

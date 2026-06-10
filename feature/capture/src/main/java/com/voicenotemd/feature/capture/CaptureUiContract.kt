@@ -19,6 +19,13 @@ data class CaptureUiState(
     val activeLanguage: Language? = null,
     val partialTranscript: String = "",
     val rmsLevel: Float = 0f,
+    /**
+     * Milliseconds of audio captured in the current take. With batch ASR (whisper, ADR
+     * 0018) there is no live transcript, so this is what drives the long-note advisory
+     * on the recording pane — the old transcript-length threshold never fired in batch
+     * mode (review 2026-06-10).
+     */
+    val recordingDurationMs: Long = 0L,
     val isAppending: Boolean = false,
     val structuredPreview: Note? = null,
     val structuringFailed: Boolean = false,
@@ -95,6 +102,16 @@ data class CaptureUiState(
 
         /** Save just happened. The next event will navigate away. */
         Saved,
+        ;
+
+        /**
+         * True while the audio pipeline is doing work that must survive screen-off /
+         * backgrounding: capturing PCM (Preparing/Recording) or running whisper on it
+         * (Transcribing). Drives the microphone foreground service keep-alive — owned
+         * by the ViewModel, not the composition (review 2026-06-10 #10).
+         */
+        val isCaptureActive: Boolean
+            get() = this == Preparing || this == Recording || this == Transcribing
     }
 }
 
@@ -118,6 +135,15 @@ sealed interface CaptureUiIntent {
 
     /** User edited the body in the review preview. */
     data class EditBody(val body: String) : CaptureUiIntent
+
+    /** User removed a tag chip in the review preview. [value] is the tag's normalized value. */
+    data class RemoveTag(val value: String) : CaptureUiIntent
+
+    /**
+     * User typed a new tag in the review preview. The raw [value] goes through
+     * `Tag.normalize` in the ViewModel — invalid or duplicate values are dropped silently.
+     */
+    data class AddTag(val value: String) : CaptureUiIntent
 
     /** User pressed Save on the review preview. */
     data object Save : CaptureUiIntent
@@ -146,6 +172,13 @@ sealed interface CaptureUiIntent {
 
     /** Submits raw text to be structured by Gemma. */
     data class SubmitText(val text: String) : CaptureUiIntent
+
+    /**
+     * User opted out of waiting for Gemma (ADR 0023): save the transcript as a plain
+     * note right now and let structuring finish in the background, upgrading the note
+     * in place when it lands. Only meaningful during [CaptureUiState.Phase.Structuring].
+     */
+    data object SaveAsPlainText : CaptureUiIntent
 }
 
 sealed interface CaptureUiEvent {
@@ -157,4 +190,18 @@ sealed interface CaptureUiEvent {
 
     /** A structuring failure was salvaged with the plain-text fallback. Inform the user. */
     data object StructuringFellBack : CaptureUiEvent
+
+    /**
+     * The note was saved as plain text and Gemma keeps structuring in the background
+     * (ADR 0023: quick-wait expired or the user tapped "Save as text now"). The note
+     * will upgrade in place when structuring lands; inform the user unobtrusively.
+     */
+    data object StructuringContinuesInBackground : CaptureUiEvent
+
+    /**
+     * First structuring of this process ran on the CPU fallback path: show the one-time
+     * "this phone runs Gemma on CPU" advisory (ADR 0016 UX follow-up) so the user knows
+     * why structuring is slower on their hardware.
+     */
+    data object CpuFallbackAdvisory : CaptureUiEvent
 }

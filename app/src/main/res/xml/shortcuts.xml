@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launcher long-press shortcut straight to capture (the home destination IS the capture
+  screen, ADR 0001). For a capture-first app, time-to-mic is the UX metric that matters;
+  this shaves the "find the icon, open, wait" path for users who pin the shortcut.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="capture_voice_note"
+        android:enabled="true"
+        android:icon="@android:drawable/ic_btn_speak_now"
+        android:shortcutShortLabel="@string/app_shortcut_capture_short"
+        android:shortcutLongLabel="@string/app_shortcut_capture_long">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:targetPackage="com.voicenotemd"
+            android:targetClass="com.voicenotemd.app.MainActivity" />
+    </shortcut>
+</shortcuts>

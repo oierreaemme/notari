@@ -170,6 +170,15 @@ class LiteRtLmGemmaSession(
 
     override fun isReady(): Boolean = engineRef.get() != null || modelFileProvider.isAvailable()
 
+    /**
+     * Set by [release] when the engine must be torn down but a native generation is in
+     * flight (the generation holds [generationMutex]). The generation's `finally` honors
+     * the request once the native call returns — closing the engine *under* a running
+     * `sendMessage()` is a native crash (the C++ side has no idea the Java peer died).
+     */
+    @Volatile
+    private var closeRequested = false
+
     override suspend fun generate(prompt: String): String =
         withContext(dispatchers.default) {
             val engine = engineRef.get() ?: ensureEngineLoaded()
@@ -177,7 +186,15 @@ class LiteRtLmGemmaSession(
             // outside this lock (it has its own engineLoadMutex), so a background warm-up
             // can still proceed while a generation is in flight.
             generationMutex.withLock {
-                runGenerate(engine, prompt)
+                try {
+                    runGenerate(engine, prompt)
+                } finally {
+                    // A release() (onTrimMemory / onTerminate) that arrived mid-generation
+                    // deferred the close to us — do it now that the native call is done.
+                    // Runs even when the calling coroutine was cancelled by a pass timeout
+                    // (this generation is then a "zombie": the finally is its last word).
+                    if (closeRequested) closeEngineNow()
+                }
             }
         }
 
@@ -255,14 +272,45 @@ class LiteRtLmGemmaSession(
             // never leaves the phone. Lets `adb logcat -s VoiceNoteGemma` show what the model
             // is actually emitting when the parser falls back. The note body in the trace is
             // the same bytes that the on-screen "Last model response (debug)" card shows.
-            Log.d(TAG, "Gemma response (${text.length} chars): $text")
+            //
+            // Gated behind LOG_MODEL_RESPONSE (default OFF) because in debug builds — the
+            // builds used daily on the reference device — the full note content would
+            // otherwise sit in the logcat ring buffer (release strips Log.d via R8, ADR
+            // 0021, so this only matters for debug). Flip the constant locally when
+            // diagnosing parser fallbacks; the length-only line below stays as the
+            // always-on breadcrumb.
+            if (LOG_MODEL_RESPONSE) {
+                Log.d(TAG, "Gemma response (${text.length} chars): $text")
+            } else {
+                Log.d(TAG, "Gemma response received (${text.length} chars)")
+            }
             text
         } finally {
             conversation.close()
         }
     }
 
-    fun release() {
+    /**
+     * Release the engine. Safe to call at any moment: if a native generation is in
+     * flight we must NOT close the engine under it (SIGSEGV risk — `Engine.close()`
+     * concurrent with a blocking `sendMessage()` on another thread). In that case we
+     * flag [closeRequested] and the generation's `finally` performs the close as soon
+     * as the native call returns. When no generation is running, the close is immediate.
+     */
+    override fun release() {
+        if (generationMutex.tryLock()) {
+            try {
+                closeEngineNow()
+            } finally {
+                generationMutex.unlock()
+            }
+        } else {
+            closeRequested = true
+        }
+    }
+
+    private fun closeEngineNow() {
+        closeRequested = false
         engineRef.getAndSet(null)?.close()
         // Reset backend so the next reader sees UNKNOWN until a fresh load
         // re-publishes a real value. Otherwise a stale backend reading could
@@ -313,6 +361,14 @@ class LiteRtLmGemmaSession(
         const val TAG = "VoiceNoteGemma"
         const val DEFAULT_TOP_K = 40
         const val DEFAULT_TEMPERATURE = 0.2f
+
+        /**
+         * When true, [runGenerate] logs the FULL model response body (note content!) at
+         * Log.d. Privacy default is false so daily-driver debug builds don't keep note
+         * text in the logcat ring buffer (review 2026-06-10 #7). Flip locally only while
+         * diagnosing parser fallbacks; never commit `true`.
+         */
+        const val LOG_MODEL_RESPONSE = false
     }
 }
 

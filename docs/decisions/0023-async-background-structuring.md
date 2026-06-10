@@ -1,6 +1,6 @@
 # 0023. Structure notes asynchronously, off the capture critical path
 
-- **Status:** Proposed
+- **Status:** Accepted (middle step implemented 2026-06-10 — see Amendment)
 - **Date:** 2026-05-31
 
 ## Context
@@ -91,3 +91,37 @@ chance to fix the output.
 
 Ship the **8 s-then-background** middle step first (small, reversible), measure,
 then move to fully async if the data supports it.
+
+## Amendment — 2026-06-10: middle step implemented
+
+`CaptureViewModel.structure()` now launches the Gemma call as a
+`viewModelScope.async` job and blocks the UI for at most
+`QUICK_STRUCTURE_WAIT_MS = 8_000` via `withTimeoutOrNull { select { … } }`:
+
+- **Fast path (≤ 8 s, typical warm GPU):** identical to the old synchronous
+  flow — Reviewing pane, edit, save.
+- **Slow path (timeout, or the user taps the new "Save as text now" button on
+  the StructuringPane — a `CompletableDeferred` skip signal raced via
+  `select`):** the transcript is saved immediately as a plain note
+  (`structured = false`), the capture screen resets to Idle with a "Note
+  saved — structuring continues in the background" snackbar, and the still-
+  running inference becomes the upgrade job.
+- **Upgrade-in-place:** when the background result lands, the note is re-read;
+  the structured version is applied (same id, `createdAt` preserved) **only
+  if** the body is still exactly the saved transcript and the note is still
+  unstructured — the concurrent-edit rule from this ADR's Consequences. An
+  edited, restructured, or deleted note wins; the result is dropped.
+- **Append mode exception:** an appended note mixes old and new content, so
+  the background result of just the new fragment cannot be merged safely. The
+  plain text is appended immediately and the inference is cancelled; the
+  manual "Structure with AI" action in note detail remains the upgrade path.
+- **Vehicle:** plain `viewModelScope` (the capture VM lives in the home
+  back-stack entry, so the job survives in-app navigation). NOT WorkManager
+  yet: process death mid-upgrade simply leaves the plain note, and the manual
+  restructure path covers it. WorkManager remains the follow-up if field use
+  shows process death is common.
+
+Tests: `CaptureViewModelTest` — slow structuring saves plain + upgrades in
+place; upgrade dropped after concurrent edit; "Save as text now" skips the
+wait. The full-async rollout (drop the Reviewing step entirely) stays open,
+to be evaluated after real-device usage of the middle step.

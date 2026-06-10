@@ -30,6 +30,26 @@ class MarkdownBodyFormatterTest {
     }
 
     @Test
+    fun `a line with unpaired bold markers loses bold entirely`() {
+        // Real-device 2026-06-10: "…budget review** on **Monday morning**" — odd
+        // marker count leaks literal asterisks in every renderer.
+        val input = "Quick thought I should email **Sarah** about the budget review** on **Monday morning**"
+        val output = MarkdownBodyFormatter.format(input)
+        assertThat(output).isEqualTo(
+            "Quick thought I should email Sarah about the budget review on Monday morning",
+        )
+    }
+
+    @Test
+    fun `balanced bold is left untouched and other lines are independent`() {
+        val input = "Una riga con **grassetto** corretto.\nRiga rotta con **metà"
+        val output = MarkdownBodyFormatter.format(input)
+        assertThat(output).isEqualTo(
+            "Una riga con **grassetto** corretto.\nRiga rotta con metà",
+        )
+    }
+
+    @Test
     fun `triple newlines collapse to double`() {
         val input = "Prima riga.\n\n\n\nSeconda riga."
         val output = MarkdownBodyFormatter.format(input)

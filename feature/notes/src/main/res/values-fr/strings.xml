@@ -25,4 +25,5 @@
     <string name="notes_empty_default">Appuyez sur le micro pour capturer votre première pensée.</string>
     <string name="notes_empty_no_match">Aucune note ne correspond à \"%s\".</string>
     <string name="notes_empty_no_tag">Aucune note avec #%s pour l\'instant.</string>
+    <string name="notes_cd_export_all_folder">Exporter toutes les notes vers un dossier</string>
 </resources>

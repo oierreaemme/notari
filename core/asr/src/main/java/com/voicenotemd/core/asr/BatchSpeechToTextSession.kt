@@ -48,14 +48,30 @@ class BatchSpeechToTextSession(
     private var activeLanguageBcp47: String = "auto"
 
     // Captured PCM chunks (copies of each read), concatenated at stop. RAM only; zeroed
-    // after transcription. Guarded by [capturedLock] — appended on the reader thread, read
-    // on the stop() coroutine.
+    // after transcription OR discard. Guarded by [capturedLock] — appended on the reader
+    // thread, swapped out by stop()/discard().
+    //
+    // OWNERSHIP RULE (ADR 0027): consumers never operate on this field directly — they
+    // atomically SWAP it for a fresh list under the lock ([takeCaptured]) and work on the
+    // private snapshot. This makes a delayed stop()/discard() from a previous take unable
+    // to touch the buffers of a session started afterwards (the cancel→restart data-loss
+    // race found in the 2026-06-10 review).
     private val capturedLock = Any()
-    private val captured = ArrayList<ShortArray>()
+    private var captured = ArrayList<ShortArray>()
+
+    // While false, the reader thread drops (and zeroes nothing — it never copied) any PCM
+    // it reads. Flipped under [capturedLock] so a chunk can never be appended after a
+    // snapshot was taken: stopCapture() clears it BEFORE joining the reader, so even a
+    // reader that outlives the 500 ms join cannot leak un-zeroed copies into the list.
+    private var accepting = false
 
     private var readerThread: Thread? = null
     private var audioRecord: AudioRecord? = null
     private var btRouter: BluetoothAudioRouter? = null
+
+    // Serializes [releaseCaptureResources]: AudioRecord is not thread-safe and the
+    // awaitClose teardown thread can race a concurrent stop()/discard() to it.
+    private val teardownLock = Any()
 
     private val _rmsDb = MutableStateFlow(0f)
     override val rmsDb: Flow<Float> = _rmsDb.asStateFlow()
@@ -66,14 +82,25 @@ class BatchSpeechToTextSession(
     private val _audioReady = MutableStateFlow(false)
     override val audioReady: Flow<Boolean> = _audioReady.asStateFlow()
 
+    // Milliseconds of PCM captured so far (samples / 16 kHz). Drives the long-note
+    // advisory in the capture UI — the transcript-length threshold is dead in batch
+    // mode because there is no live transcript. Reset at the start of every session.
+    private val _capturedDurationMs = MutableStateFlow(0L)
+    override val capturedDurationMs: Flow<Long> = _capturedDurationMs.asStateFlow()
+
     @SuppressLint("MissingPermission") // RECORD_AUDIO is requested by the app before capture starts.
     override fun start(language: Language): Flow<TranscriptChunk> =
         callbackFlow {
             stopRequested.set(false)
             captureStopped.set(false)
             _audioReady.value = false
+            _capturedDurationMs.value = 0L
             activeLanguageBcp47 = if (language == Language.Unknown) "auto" else language.bcp47
-            synchronized(capturedLock) { captured.clear() }
+            // Defensive: any leftover chunks from a session that was torn down without
+            // stop()/discard() are zeroed before the references are dropped (ADR 0002 —
+            // PCM must never linger in the heap un-overwritten).
+            zeroAndDrop(takeCaptured())
+            synchronized(capturedLock) { accepting = true }
 
             // Route to a Bluetooth headset mic if connected (in-car / hands-free). ADR 0018.
             val router = BluetoothAudioRouter(context).also { btRouter = it }
@@ -105,6 +132,7 @@ class BatchSpeechToTextSession(
                         Log.i(TAG, "AudioRecord.startRecording() returned, reading…")
                         var firstReadLogged = false
                         var firstNonSilentLogged = false
+                        var totalSamples = 0L
                         while (!stopRequested.get()) {
                             val read = record.read(readBuffer, 0, readBuffer.size)
                             if (read <= 0) continue
@@ -129,8 +157,15 @@ class BatchSpeechToTextSession(
                                 _audioReady.value = true
                             }
                             _rmsDb.value = rms
-                            // Copy: the read buffer is reused on the next iteration.
-                            synchronized(capturedLock) { captured.add(readBuffer.copyOf(read)) }
+                            // Copy: the read buffer is reused on the next iteration. The
+                            // append is gated on [accepting] under the same lock the
+                            // consumers use, so a read that completes after stopCapture()
+                            // can never add a chunk behind a taken snapshot.
+                            synchronized(capturedLock) {
+                                if (accepting) captured.add(readBuffer.copyOf(read))
+                            }
+                            totalSamples += read
+                            _capturedDurationMs.value = totalSamples * 1000L / SAMPLE_RATE
                         }
                     }
                     // Scratch read buffer is transient; zero it before the thread exits.
@@ -143,52 +178,115 @@ class BatchSpeechToTextSession(
             trySend(TranscriptChunk(text = "", isFinal = false, detectedLanguage = language))
 
             awaitClose {
-                stopCapture()
+                // Stop the reader promptly (cheap, safe on Main)…
+                stopRequested.set(true)
+                synchronized(capturedLock) { accepting = false }
+                // …but do the heavy teardown (thread join up to 500 ms, AudioRecord
+                // release, BT route clear) on a short-lived background thread: the
+                // collector context is typically Main and joining there janks the UI.
+                //
+                // The teardown operates on THIS session's captured locals (`thread`,
+                // `record`, `router`), never on the shared fields — a delayed close
+                // can therefore never release the resources of a session started
+                // afterwards (ADR 0027). Buffer zeroing is NOT done here: the
+                // legitimate stop() path still needs the data after the flow is
+                // cancelled; the VM-owned discard()/stop() calls are the zeroing points.
+                Thread { releaseCaptureResources(thread, record, router) }
+                    .apply { name = "asr-teardown" }
+                    .start()
                 _rmsDb.value = 0f
             }
         }
 
-    override suspend fun stop(): String {
-        stopCapture()
+    override suspend fun stop(): String =
+        withContext(Dispatchers.Default) {
+            stopCapture()
 
-        val pcm =
-            synchronized(capturedLock) {
-                val total = captured.sumOf { it.size }
-                val out = ShortArray(total)
-                var offset = 0
-                for (chunk in captured) {
-                    chunk.copyInto(out, offset)
-                    offset += chunk.size
+            // Atomic swap: from here on this coroutine is the only owner of [snapshot];
+            // a session started concurrently gets a fresh list and can't be affected.
+            val snapshot = takeCaptured()
+            val pcm =
+                run {
+                    val total = snapshot.sumOf { it.size }
+                    val out = ShortArray(total)
+                    var offset = 0
+                    for (chunk in snapshot) {
+                        chunk.copyInto(out, offset)
+                        offset += chunk.size
+                    }
+                    out
                 }
-                out
-            }
 
-        val transcript =
-            withContext(Dispatchers.Default) {
+            // Idempotency guard: a second stop() (or a stop after discard) finds an empty
+            // snapshot — return immediately instead of loading the ASR model for nothing.
+            if (pcm.isEmpty()) return@withContext ""
+
+            try {
                 transcriber.transcribe(pcm, SAMPLE_RATE, activeLanguageBcp47)
+            } finally {
+                // Privacy: overwrite the captured audio in RAM as soon as it has been
+                // transcribed — also on the exception path.
+                zeroAndDrop(snapshot)
+                pcm.fill(0)
             }
-
-        // Privacy: overwrite the captured audio in RAM as soon as it has been transcribed.
-        synchronized(capturedLock) {
-            captured.forEach { it.fill(0) }
-            captured.clear()
         }
-        pcm.fill(0)
 
-        return transcript
+    override suspend fun discard() {
+        withContext(Dispatchers.Default) {
+            stopCapture()
+            // No transcription: the user abandoned the take. Zero + drop immediately —
+            // discarded audio must never be processed nor linger in the heap (ADR 0002).
+            zeroAndDrop(takeCaptured())
+        }
+    }
+
+    /**
+     * Atomically swap the captured-chunk list for a fresh one and return the snapshot.
+     * Also stops accepting new chunks, so the snapshot is complete and final.
+     */
+    private fun takeCaptured(): List<ShortArray> =
+        synchronized(capturedLock) {
+            accepting = false
+            val snapshot = captured
+            captured = ArrayList()
+            snapshot
+        }
+
+    /** Overwrite every chunk with zeros, then drop the references. */
+    private fun zeroAndDrop(chunks: List<ShortArray>) {
+        chunks.forEach { it.fill(0) }
     }
 
     /** Idempotent: stops capture, joins the reader thread, releases the recorder + BT route. */
     private fun stopCapture() {
         if (!captureStopped.compareAndSet(false, true)) return
         stopRequested.set(true)
-        runCatching { readerThread?.join(THREAD_JOIN_MS) }
-        readerThread = null
-        runCatching { audioRecord?.stop() }
-        runCatching { audioRecord?.release() }
-        audioRecord = null
-        runCatching { btRouter?.clear() }
-        btRouter = null
+        // Stop accepting BEFORE joining: even if the reader outlives the join timeout,
+        // any PCM it reads afterwards is dropped instead of copied into the list.
+        synchronized(capturedLock) { accepting = false }
+        val thread = readerThread.also { readerThread = null }
+        val record = audioRecord.also { audioRecord = null }
+        val router = btRouter.also { btRouter = null }
+        releaseCaptureResources(thread, record, router)
+    }
+
+    /**
+     * Releases one capture's OS-side resources. Serialized via [teardownLock] because two
+     * paths can race to it for the same objects (the `awaitClose` background thread and a
+     * concurrent `stop()`/`discard()`), and `AudioRecord` is not thread-safe. Every call
+     * is `runCatching`-wrapped, so double-release of an already-dead recorder is a no-op.
+     */
+    private fun releaseCaptureResources(
+        thread: Thread?,
+        record: AudioRecord?,
+        router: BluetoothAudioRouter?,
+    ) {
+        synchronized(teardownLock) {
+            runCatching { thread?.join(THREAD_JOIN_MS) }
+            runCatching { record?.stop() }
+            runCatching { record?.release() }
+            runCatching { router?.clear() }
+        }
     }
 
     internal companion object {

@@ -29,7 +29,7 @@
     <string name="capture_mic_stabilizing">Mic stabilizing — speak in a moment.</string>
     <string name="capture_structuring_elapsed">%1$ds elapsed</string>
     <string name="capture_transcribing_subtitle">Audio is becoming text. Staying on device.</string>
-    <string name="capture_structuring_info">Gemma 4 E2B is running locally on your device. Structuring time depends on your hardware (typically 20–90 s, longer on older phones without GPU acceleration). Your audio and transcript never leave the phone.</string>
+    <string name="capture_structuring_info">Gemma 4 E2B is running locally on your device. If it takes more than a few seconds, your note is saved as text automatically and the structure arrives in the background. Your audio and transcript never leave the phone.</string>
     <string name="capture_long_note_warning">Long note — structuring may take a bit longer and may simplify long stretches.</string>
     <string name="capture_structuring_failed_banner">Saved as plain text — auto-structuring is unavailable right now.</string>
     <string name="capture_fallback_snackbar">Could not auto-structure this note — saved as plain text.</string>
@@ -43,4 +43,12 @@
     <string name="mentions_unresolved">Left unresolved — reference too vague</string>
     <string name="capture_lang_offline_hint">If offline dictation in your language returns nothing, install the matching language pack from Android Settings → System → Languages → Speech → Offline.</string>
     <string name="capture_debug_last_response">Last model response (debug)</string>
+    <string name="capture_btn_save_as_text">Save as text now</string>
+    <string name="capture_save_as_text_hint">Your note is already safe — AI structuring will finish in the background.</string>
+    <string name="capture_saved_structuring_background">Note saved — structuring continues in the background.</string>
+    <string name="capture_cpu_advisory">This phone runs Gemma on CPU — structuring takes longer than on GPU-enabled devices. Notes are saved instantly either way.</string>
+    <string name="capture_label_add_tag">Add tag</string>
+    <string name="capture_cd_remove_tag">Remove tag %1$s</string>
+    <string name="capture_btn_preview_body">Preview</string>
+    <string name="capture_btn_edit_body">Edit</string>
 </resources>

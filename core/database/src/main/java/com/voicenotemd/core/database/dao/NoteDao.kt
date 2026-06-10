@@ -37,6 +37,20 @@ interface NoteDao {
     @Query("SELECT DISTINCT value FROM note_tags ORDER BY value ASC")
     fun observeAllTagValues(): Flow<List<String>>
 
+    /**
+     * Tag corpus projection for the structuring prompt (ADR 0012/0017): every distinct
+     * (tag value, note language) pair. Lets the capture flow build the language-scoped
+     * EXISTING_TAGS list without holding full notes in memory (review 2026-06-10 #13).
+     */
+    @Query(
+        """
+        SELECT DISTINCT t.value AS value, n.language AS language
+        FROM note_tags t
+        INNER JOIN notes n ON n.id = t.note_id
+        """,
+    )
+    fun observeTagValuesWithLanguage(): Flow<List<TagValueWithLanguage>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertNote(note: NoteEntity)
 
@@ -85,4 +99,10 @@ data class NoteWithRelations(
     val tags: List<TagEntity>,
     @Relation(parentColumn = "id", entityColumn = "note_id")
     val mentions: List<MentionEntity>,
+)
+
+/** Row shape of [NoteDao.observeTagValuesWithLanguage]. `language` is the BCP-47 string. */
+data class TagValueWithLanguage(
+    val value: String,
+    val language: String,
 )

@@ -145,10 +145,50 @@ class NoteRepositoryImplTest {
             }
         }
 
+    @Test
+    fun `observeTagCorpus emits distinct tag-language pairs from the join query`() =
+        runTest {
+            repo.insert(
+                sampleNote(
+                    id = "en1",
+                    tags = listOf("work", "errands"),
+                    createdAt = Instant.parse("2026-05-09T10:00:00Z"),
+                ),
+            )
+            repo.insert(
+                sampleNote(
+                    id = "it1",
+                    tags = listOf("lavoro"),
+                    language = Language.Italian,
+                    createdAt = Instant.parse("2026-05-09T11:00:00Z"),
+                ),
+            )
+            // Same tag value as en1 on a second English note: the corpus must stay distinct.
+            repo.insert(
+                sampleNote(
+                    id = "en2",
+                    tags = listOf("work"),
+                    createdAt = Instant.parse("2026-05-09T12:30:00Z"),
+                ),
+            )
+
+            repo.observeTagCorpus().test {
+                val corpus = awaitItem()
+                assertThat(corpus.map { it.tag.value to it.language })
+                    .containsExactly(
+                        "work" to Language.English,
+                        "errands" to Language.English,
+                        "lavoro" to Language.Italian,
+                    )
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
     private fun sampleNote(
         id: String,
         title: String = "Title",
         tags: List<String> = listOf("errands"),
+        language: Language = Language.English,
         createdAt: Instant = Instant.parse("2026-05-09T12:00:00Z"),
     ): Note =
         Note(
@@ -160,7 +200,7 @@ class NoteRepositoryImplTest {
                 listOf(
                     DateMention("tomorrow at 3pm", Instant.parse("2026-05-10T15:00:00Z")),
                 ),
-            language = Language.English,
+            language = language,
             createdAt = createdAt,
             updatedAt = createdAt,
             structured = true,

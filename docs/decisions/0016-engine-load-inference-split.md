@@ -289,3 +289,16 @@ records calls to `backend()` and pins the ordering
 `warmUp → backend → generate` so a refactor cannot accidentally read
 backend before the engine is loaded (which would always read UNKNOWN
 and forfeit the GPU optimization on that path).
+
+## Amendment — 2026-06-10: the GPU-init failure was a manifest omission (see ADR 0030)
+
+The premise of the evening amendment — "on the user's device, `Backend.GPU()`
+initialization fails with an internal LiteRT-LM error" — turned out to be a
+missing `<uses-native-library android:name="libOpenCL.so">` declaration in
+the app manifest: on API 31+ the loader refuses undeclared vendor libraries,
+so OpenCL could never load and every init fell back to CPU. With the
+declaration added, the reference Pixel runs `Backend.GPU` (validated
+on-device 2026-06-10). The backend-aware budget model above **stays as
+designed** — it now serves the devices that genuinely lack a working OpenCL
+path (Tensor G3, Exynos/Xclipse) instead of every Pixel. Full story,
+validation log and lessons in ADR 0030.

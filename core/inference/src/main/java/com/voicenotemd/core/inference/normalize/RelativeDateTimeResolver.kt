@@ -66,7 +66,10 @@ object RelativeDateTimeResolver {
      * want to match "stasera dopo cena con marco" against any table entry).
      */
     private fun normalize(raw: String): String? {
-        val trimmed = raw.trim().trim('.', ',', ';', ':', '!', '?', '"', '‘', '’', '"', '"')
+        // NFC first: ASR/model output can carry decomposed accents ("venerdi" +
+        // combining grave) that would miss the composed-form table keys.
+        val nfc = java.text.Normalizer.normalize(raw, java.text.Normalizer.Form.NFC)
+        val trimmed = nfc.trim().trim('.', ',', ';', ':', '!', '?', '"', '‘', '’', '"', '"')
         if (trimmed.isEmpty()) return null
         val collapsed = trimmed.lowercase(Locale.ROOT).replace(MULTI_WS, " ")
         if (collapsed.length > MAX_NORMALIZED_LEN) return null
@@ -84,6 +87,44 @@ object RelativeDateTimeResolver {
             "pt" -> listOf(PortugueseTable)
             else -> AllTables
         }
+    }
+
+    /**
+     * The table phrases that are safe to PROACTIVELY search for inside a transcript
+     * (the [DeterministicMentionScanner] backstop, review 2026-06-10): future-oriented
+     * anchors only. Past/present anchors ("oggi", "ieri", "today", "this week", …) are
+     * excluded because they appear constantly in conversational narration ("oggi è
+     * andata bene la riunione") without being schedulable references — scanning for
+     * them would fabricate junk mention chips on notes that have none.
+     */
+    internal fun scannablePhrases(languageBcp47: String?): Set<String> =
+        pickTables(languageBcp47)
+            .flatMap { it.entries.keys }
+            .filterNot { phrase ->
+                phrase
+                    .split(NON_WORD)
+                    .filter(String::isNotEmpty)
+                    .any { it in SCAN_EXCLUDED_TOKENS }
+            }
+            .toSet()
+
+    /**
+     * [NON_FUTURE_DAY_TOKENS] plus the demonstrative/present and time-of-today tokens
+     * that make a phrase conversational rather than schedulable when scanned
+     * proactively. Only used by [scannablePhrases]; resolution of model-emitted
+     * surface forms is NOT filtered by this. `lazy` because it references
+     * [NON_FUTURE_DAY_TOKENS], which is declared further down in this object —
+     * a direct initializer would read it before its own initialization.
+     */
+    private val SCAN_EXCLUDED_TOKENS: Set<String> by lazy {
+        NON_FUTURE_DAY_TOKENS +
+            setOf(
+                "questa", "this", "esta", "cette", "diese",
+                "stamattina", "stamane",
+                "mezzogiorno", "mezzanotte", "noon", "midnight",
+                "mediodía", "medianoche", "midi", "minuit",
+                "mittags", "mitternacht", "meio", "meia",
+            )
     }
 
     private val MULTI_WS = Regex("\\s+")

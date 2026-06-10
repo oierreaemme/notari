@@ -58,11 +58,16 @@ class StaticPromptTemplate(private val template: String) : PromptTemplate {
             existingTags
                 .take(MAX_EXISTING_TAGS_IN_PROMPT)
                 .joinToString(", ")
+        // The transcript is substituted LAST: it is the only user-controlled value, and
+        // substituting it first let a transcript containing a literal marker (e.g. a
+        // typed note with "{{EXISTING_TAGS}}") be expanded by the later replaces —
+        // a small template-injection hole (review 2026-06-10). With the transcript
+        // last, marker-looking text inside it is passed through verbatim.
         return template
-            .replace(TRANSCRIPT_MARKER, transcript)
             .replace(NOW_ISO_MARKER, nowFormatted)
             .replace(NOW_TIMEZONE_MARKER, zone.id)
             .replace(EXISTING_TAGS_MARKER, tagsForPrompt)
+            .replace(TRANSCRIPT_MARKER, transcript)
     }
 
     companion object {

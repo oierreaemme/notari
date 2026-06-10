@@ -34,14 +34,18 @@ class WhisperBatchTranscriber(
                 Log.e(TAG, "whisper failed to load model at $modelPath")
                 return@withContext ""
             }
+            // 16-bit PCM → normalised float, as whisper expects.
+            val audio = FloatArray(pcm.size) { pcm[it] / PCM_FULL_SCALE }
             try {
-                // 16-bit PCM → normalised float, as whisper expects.
-                val audio = FloatArray(pcm.size) { pcm[it] / PCM_FULL_SCALE }
                 val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
                 val language = languageBcp47.ifBlank { "auto" }
                 Log.i(TAG, "transcribing ${audio.size} samples lang=$language threads=$threads")
                 whisper.transcribe(audio, language, threads).trim()
             } finally {
+                // Privacy (ADR 0002): the float copy is a full second image of the
+                // dictation — overwrite it before dropping the reference, same rule as
+                // the ShortArray buffers in BatchSpeechToTextSession.
+                audio.fill(0f)
                 whisper.release()
             }
         }
