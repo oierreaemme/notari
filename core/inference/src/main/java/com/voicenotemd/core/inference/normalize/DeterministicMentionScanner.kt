@@ -123,11 +123,9 @@ object DeterministicMentionScanner {
             (after != null && after in PAST_MODIFIERS)
     }
 
-    private fun String.takeLastWordOrNull(): String? =
-        trimEnd().split(NON_LETTER).lastOrNull { it.isNotEmpty() }
+    private fun String.takeLastWordOrNull(): String? = trimEnd().split(NON_LETTER).lastOrNull { it.isNotEmpty() }
 
-    private fun String.takeFirstWordOrNull(): String? =
-        trimStart().split(NON_LETTER).firstOrNull { it.isNotEmpty() }
+    private fun String.takeFirstWordOrNull(): String? = trimStart().split(NON_LETTER).firstOrNull { it.isNotEmpty() }
 
     /** Mutable span: compound merging extends a day anchor over its adjacent time. */
     private class Span(range: IntRange, var resolved: Instant) {
