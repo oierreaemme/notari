@@ -30,6 +30,8 @@ template](https://github.com/joelparkerhenderson/architecture-decision-record/bl
 | 0022 | Accepted | [Model delivery: keep SAF now, Play Asset Delivery when distribution scales](0022-model-delivery-saf-now-pad-later.md) |
 | 0023 | Proposed | [Structure notes asynchronously, off the capture critical path](0023-async-background-structuring.md) |
 | 0024 | Proposed | [Make resolved datetime mentions actionable (reminders / calendar)](0024-actionable-datetime-mentions.md) |
+| 0025 | Parked | [Speaker diarization: considered, parked](0025-speaker-diarization-parked.md) |
+| 0026 | Parked | [Notari desktop companion for heavy processing: idea, parked](0026-notari-desktop-companion-parked.md) |
 
 ## Adding a new ADR
 
