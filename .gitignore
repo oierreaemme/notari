@@ -69,6 +69,11 @@ GEMINI.md
 # counterparts live here and are never committed.
 docs/decisions/internal/
 
+# Session hand-off notes and ad-hoc status logs — working scratchpads kept
+# local. The durable record lives in the ADRs and docs/prompt-evaluations/.
+docs/sessions/
+docs/stato-sviluppo-2026-05-29.md
+
 # Secrets — there are no secrets in this project, but defense in depth
 .env
 .env.*
