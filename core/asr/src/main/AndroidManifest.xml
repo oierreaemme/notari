@@ -5,4 +5,9 @@
       module that actually uses it.
     -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!--
+      Needed to route capture to a connected Bluetooth headset mic (SCO/HFP) for
+      hands-free / in-car dictation. Normal permission — no runtime prompt. See ADR 0018.
+    -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 </manifest>

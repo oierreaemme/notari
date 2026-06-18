@@ -2,7 +2,9 @@ package com.voicenotemd.core.common.repository
 
 import com.voicenotemd.core.common.domain.Note
 import com.voicenotemd.core.common.domain.Tag
+import com.voicenotemd.core.common.domain.TagUsage
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 /**
  * The single point of access to the persisted note collection.
@@ -31,6 +33,22 @@ interface NoteRepository {
      * Stream the union of tags currently in use, sorted alphabetically.
      */
     fun observeAllTags(): Flow<List<Tag>>
+
+    /**
+     * Stream the tag corpus as (tag, note-language) pairs — the projection the
+     * structuring flow feeds to the EXISTING_TAGS prompt list, scoped per language
+     * (ADR 0012 / ADR 0017). Distinct pairs, no ordering guarantee.
+     *
+     * Default derives from [observeAll] so lightweight fakes keep compiling; the Room
+     * implementation overrides it with a dedicated join query so the capture flow does
+     * not have to hold every note body in memory (review 2026-06-10 #13).
+     */
+    fun observeTagCorpus(): Flow<List<TagUsage>> =
+        observeAll().map { notes ->
+            notes
+                .flatMap { note -> note.tags.map { TagUsage(it, note.language) } }
+                .distinct()
+        }
 
     suspend fun insert(note: Note)
 

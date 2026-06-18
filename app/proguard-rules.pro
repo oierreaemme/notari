@@ -10,9 +10,15 @@
 -keep class com.google.ai.edge.litertlm.** { *; }
 -dontwarn com.google.ai.edge.litertlm.**
 
-# MediaPipe (kept for future multimodal upgrade path, ADR 0008).
--keep class com.google.mediapipe.** { *; }
--keep class com.google.android.gms.** { *; }
+# MediaPipe / GMS: NOT direct dependencies anymore (LiteRT-LM migration, ADR 0008).
+# The old blanket `-keep class … { *; }` rules disabled R8 shrinking/obfuscation for
+# anything those packages pulled in transitively, inflating the APK for no benefit
+# (review 2026-06-10 #14). `-dontwarn` is enough: if a transitive artifact references
+# these classes on a code path we never execute, R8 should neither fail the build nor
+# be forced to keep them. If MediaPipe returns as a direct dependency (multimodal
+# upgrade path), reintroduce targeted keeps for the classes its JNI actually looks up.
+-dontwarn com.google.mediapipe.**
+-dontwarn com.google.android.gms.**
 
 # Keep Hilt-generated code.
 -keep class dagger.hilt.** { *; }
@@ -21,3 +27,17 @@
 # Moshi reflective adapters (for the few non-codegen models we keep).
 -keep class kotlin.Metadata { *; }
 -keepclasseswithmembers class * { @com.squareup.moshi.JsonClass <init>(...); }
+
+# ── Strip diagnostic Logs from the release build ──────────────────────────────
+# Spike-era informational logging stays *active in debug* (so we can pull
+# logcat for on-device troubleshooting — BatchSession timings, AsrBtRouter
+# routing decisions, WhisperBatch model loads, etc.) and gets stripped here.
+# `-assumenosideeffects` tells R8 the call returns nothing observable, so it
+# removes both the call AND any argument computation (string concatenation
+# in the log message), giving zero runtime overhead. Log.e/Log.w stay — a
+# real production failure still surfaces in logcat. See ADR 0021.
+-assumenosideeffects class android.util.Log {
+    public static *** v(...);
+    public static *** d(...);
+    public static *** i(...);
+}

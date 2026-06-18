@@ -3,16 +3,16 @@ package com.voicenotemd.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voicenotemd.core.common.domain.Language
+import com.voicenotemd.core.common.repository.GemmaModel
 import com.voicenotemd.core.common.repository.ImportResult
+import com.voicenotemd.core.common.repository.ModelImportCandidate
 import com.voicenotemd.core.common.repository.NoteRepository
 import com.voicenotemd.core.common.repository.OnDeviceModelRepository
 import com.voicenotemd.core.common.repository.SettingsRepository
+import com.voicenotemd.core.common.repository.WhisperModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -38,15 +38,30 @@ class SettingsViewModel
     constructor(
         private val settingsRepository: SettingsRepository,
         private val noteRepository: NoteRepository,
-        private val modelRepository: OnDeviceModelRepository,
+        @GemmaModel private val gemmaRepository: OnDeviceModelRepository,
+        @WhisperModel private val whisperRepository: OnDeviceModelRepository,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(SettingsUiState())
         val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
-        private val _uiEvents = MutableSharedFlow<Nothing>()
+        private fun repositoryFor(model: ManagedModel): OnDeviceModelRepository =
+            when (model) {
+                ManagedModel.Gemma -> gemmaRepository
+                ManagedModel.Whisper -> whisperRepository
+            }
 
-        @Suppress("unused")
-        val uiEvents: SharedFlow<Nothing> = _uiEvents.asSharedFlow()
+        /** Applies [transform] to the [ModelSectionState] for [model], leaving the other intact. */
+        private fun updateSection(
+            model: ManagedModel,
+            transform: (ModelSectionState) -> ModelSectionState,
+        ) {
+            _uiState.update {
+                when (model) {
+                    ManagedModel.Gemma -> it.copy(gemma = transform(it.gemma))
+                    ManagedModel.Whisper -> it.copy(whisper = transform(it.whisper))
+                }
+            }
+        }
 
         init {
             viewModelScope.launch {
@@ -60,9 +75,11 @@ class SettingsViewModel
                     }
                 }
             }
-            viewModelScope.launch {
-                modelRepository.observeStatus().collect { status ->
-                    _uiState.update { it.copy(modelStatus = status) }
+            ManagedModel.entries.forEach { model ->
+                viewModelScope.launch {
+                    repositoryFor(model).observeStatus().collect { status ->
+                        updateSection(model) { it.copy(status = status) }
+                    }
                 }
             }
         }
@@ -91,9 +108,9 @@ class SettingsViewModel
                 SettingsUiIntent.ConfirmDeleteAll -> deleteAll()
                 SettingsUiIntent.AcknowledgeDeletion ->
                     _uiState.update { it.copy(notesDeleted = false) }
-                SettingsUiIntent.DeleteModel -> deleteModel()
-                SettingsUiIntent.DismissImportError ->
-                    _uiState.update { it.copy(lastImportError = null) }
+                is SettingsUiIntent.DeleteModel -> deleteModel(intent.model)
+                is SettingsUiIntent.DismissImportError ->
+                    updateSection(intent.model) { it.copy(lastImportError = null) }
                 is SettingsUiIntent.SetRequireBiometricUnlock -> setBiometricLock(intent.enabled)
             }
         }
@@ -116,33 +133,26 @@ class SettingsViewModel
          * @param openStream factory that opens the input stream. Returning `null` means the
          *   resolver couldn't open the document — we surface a friendly error.
          */
-        fun importModelFromStream(openStream: suspend () -> InputStream?) {
-            if (_uiState.value.isImportingModel) return
-            _uiState.update { it.copy(isImportingModel = true, lastImportError = null) }
+        fun importModelFromStream(
+            model: ManagedModel,
+            candidate: ModelImportCandidate = ModelImportCandidate(null, null),
+            openStream: suspend () -> InputStream?,
+        ) {
+            if (_uiState.value.section(model).isImporting) return
+            updateSection(model) { it.copy(isImporting = true, lastImportError = null) }
             viewModelScope.launch {
                 val stream = openStream()
                 if (stream == null) {
-                    _uiState.update {
-                        it.copy(
-                            isImportingModel = false,
-                            lastImportError = "Couldn't read the chosen file.",
-                        )
+                    updateSection(model) {
+                        it.copy(isImporting = false, lastImportError = "Couldn't read the chosen file.")
                     }
                     return@launch
                 }
-                val result = stream.use { modelRepository.importFrom(it) }
-                _uiState.update { state ->
+                val result = stream.use { repositoryFor(model).importFrom(it, candidate) }
+                updateSection(model) {
                     when (result) {
-                        is ImportResult.Success ->
-                            state.copy(
-                                isImportingModel = false,
-                                lastImportError = null,
-                            )
-                        is ImportResult.Failed ->
-                            state.copy(
-                                isImportingModel = false,
-                                lastImportError = result.reason,
-                            )
+                        is ImportResult.Success -> it.copy(isImporting = false, lastImportError = null)
+                        is ImportResult.Failed -> it.copy(isImporting = false, lastImportError = result.reason)
                     }
                 }
             }
@@ -164,9 +174,9 @@ class SettingsViewModel
             }
         }
 
-        private fun deleteModel() {
+        private fun deleteModel(model: ManagedModel) {
             viewModelScope.launch {
-                modelRepository.delete()
+                repositoryFor(model).delete()
             }
         }
     }

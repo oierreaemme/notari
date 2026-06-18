@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">Configurações</string>
+    <string name="settings_delete_all_confirm_title">Excluir todas as notas?</string>
+    <string name="settings_delete_all_confirm_text">Isso exclui todas as notas do dispositivo permanentemente. Não pode ser desfeito.</string>
+    <string name="settings_btn_delete_everything">Excluir tudo</string>
+    <string name="settings_btn_cancel">Cancelar</string>
+    <string name="settings_btn_delete_all_notes">Excluir todas as notas</string>
+    <string name="settings_lang_auto">Auto</string>
+    <string name="settings_phase_importing">Importando…</string>
+    <string name="settings_btn_remove">Remover</string>
+    <string name="settings_cd_back">Voltar</string>
+    <string name="settings_section_on_device_models">Modelos no dispositivo</string>
+    <string name="settings_section_security">Segurança</string>
+    <string name="settings_section_privacy">Privacidade</string>
+    <string name="settings_section_language">Idioma</string>
+    <string name="settings_section_danger_zone">Zona de perigo</string>
+    <string name="settings_biometric_title">Exigir desbloqueio biométrico</string>
+    <string name="settings_biometric_desc_unavailable">Configure uma impressão digital ou reconhecimento facial nas configurações do Android para ativar isso.</string>
+    <string name="settings_biometric_desc_available">Solicitar sua impressão digital ou rosto cada vez que o app abrir. As notas ficam privadas mesmo quando o telefone está desbloqueado.</string>
+    <string name="settings_model_status_ready">Pronto</string>
+    <string name="settings_model_status_not_imported">Não importado</string>
+    <string name="settings_btn_replace">Substituir</string>
+    <string name="settings_danger_zone_desc">Excluir permanentemente todas as notas armazenadas neste dispositivo.</string>
+    <string name="settings_snackbar_all_deleted">Todas as notas foram excluídas.</string>
+    <string name="settings_models_intro">Ambos os modelos rodam inteiramente no dispositivo — sem rede, nunca. Importe cada arquivo baixado; vamos copiá-lo para o armazenamento privado.</string>
+    <string name="settings_gemma_title">Gemma (estruturação de notas)</string>
+    <string name="settings_gemma_desc">Gemma 4 E2B, ~1,5 GB, um arquivo .litertlm. Sem ele, as notas são salvas como texto simples. Baixe do Google AI (ai.google.dev/gemma).</string>
+    <string name="settings_whisper_title">Whisper (transcrição)</string>
+    <string name="settings_whisper_desc">Um modelo whisper.cpp ggml-*.bin (ex. ggml-small-q5_1.bin, ~180 MB). Sem ele, a ditação não pode ser transcrita. Baixe de huggingface.co/ggerganov/whisper.cpp.</string>
+    <string name="settings_import_gemma">Importar .litertlm</string>
+    <string name="settings_import_whisper">Importar ggml .bin</string>
+    <string name="settings_privacy_body">Notari não solicita a permissão INTERNET e não faz chamadas de rede. O áudio é mantido apenas na RAM durante a gravação e é substituído quando a transcrição é concluída — nenhum arquivo de áudio toca o disco.</string>
+    <string name="settings_privacy_verify">Verificar com adb: adb shell dumpsys package com.voicenotemd | grep \"permission.INTERNET\" não retorna nada.</string>
+    <string name="settings_permissions_label">Permissões utilizadas:</string>
+    <string name="settings_permission_record_audio">• RECORD_AUDIO — necessário para capturar a voz. O buffer nunca é gravado em arquivo.</string>
+    <string name="settings_language_body">Por padrão, a ditação usa o idioma do sistema do telefone. O reconhecedor de voz do Android não detecta automaticamente o idioma falado — selecione um aqui se ditar em um idioma diferente.</string>
+</resources>

@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: actions/setup-java@v4
         with:
@@ -52,6 +54,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: actions/setup-java@v4
         with:
@@ -89,6 +93,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: actions/setup-java@v4
         with:
@@ -109,6 +115,8 @@ jobs:
     needs: [static-analysis, unit-tests, privacy-gate]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: actions/setup-java@v4
         with:

@@ -47,10 +47,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.documentfile.provider.DocumentFile
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voicenotemd.core.common.domain.Note
@@ -79,6 +82,29 @@ fun NotesRoute(
             viewModel.exportToZip { context.contentResolver.openOutputStream(uri) }
         }
 
+    // Folder (Obsidian vault) export: the user picks a directory via SAF and every note
+    // lands as a frontmattered .md the vault indexes natively. Deterministic filenames +
+    // delete-then-create make a re-export update files in place instead of duplicating.
+    val folderExportLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocumentTree(),
+        ) { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            val dir = DocumentFile.fromTreeUri(context, uri)
+            viewModel.exportToFolder { filename, content ->
+                if (dir == null || !dir.canWrite()) return@exportToFolder false
+                runCatching {
+                    dir.findFile(filename)?.delete()
+                    val file =
+                        dir.createFile("text/markdown", filename)
+                            ?: return@exportToFolder false
+                    context.contentResolver.openOutputStream(file.uri)?.use { out ->
+                        out.write(content.toByteArray(Charsets.UTF_8))
+                    } != null
+                }.getOrDefault(false)
+            }
+        }
+
     LaunchedEffect(viewModel.uiEvents) {
         viewModel.uiEvents.collect { event ->
             when (event) {
@@ -89,9 +115,19 @@ fun NotesRoute(
                         )
                     exportLauncher.launch("VoiceNotesExport_$date.zip")
                 }
+                is NotesUiEvent.TriggerFolderPicker -> folderExportLauncher.launch(null)
                 is NotesUiEvent.ExportCompleted -> snackbarHost.showSnackbar(event.message)
                 is NotesUiEvent.SelectionDeleted -> {
-                    val msg = if (event.count == 1) "1 note deleted." else "${event.count} notes deleted."
+                    val msg =
+                        if (event.count == 1) {
+                            context.getString(R.string.notes_deleted_one)
+                        } else {
+                            context.resources.getQuantityString(
+                                R.plurals.notes_deleted_many,
+                                event.count,
+                                event.count,
+                            )
+                        }
                     snackbarHost.showSnackbar(msg)
                 }
             }
@@ -120,30 +156,60 @@ internal fun NotesScreen(
         snackbarHost = { SnackbarHost(snackbarHost) },
         topBar = {
             TopAppBar(
-                title = { Text(if (state.isSelectionMode) "${state.selectedNoteIds.size} selected" else "Notes") },
+                title = {
+                    Text(
+                        if (state.isSelectionMode) {
+                            stringResource(R.string.notes_selected, state.selectedNoteIds.size)
+                        } else {
+                            stringResource(R.string.notes_title)
+                        },
+                    )
+                },
                 navigationIcon = {
                     if (state.isSelectionMode) {
                         IconButton(onClick = { onIntent(NotesUiIntent.ClearSelection) }) {
-                            Icon(Icons.Outlined.Close, contentDescription = "Clear selection")
+                            Icon(
+                                Icons.Outlined.Close,
+                                contentDescription = stringResource(R.string.notes_cd_clear_selection),
+                            )
                         }
                     } else {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                Icons.AutoMirrored.Outlined.ArrowBack,
+                                contentDescription = stringResource(R.string.notes_cd_back),
+                            )
                         }
                     }
                 },
                 actions = {
+                    if (!state.isSelectionMode && state.notes.isNotEmpty()) {
+                        // Export the whole collection to a folder (Obsidian vault flow).
+                        // In selection mode the selection-scoped exports take over below.
+                        IconButton(onClick = { onIntent(NotesUiIntent.RequestFolderExport) }) {
+                            Icon(
+                                Icons.Outlined.Download,
+                                contentDescription = stringResource(R.string.notes_cd_export_all_folder),
+                            )
+                        }
+                    }
                     if (state.isSelectionMode) {
                         IconButton(onClick = { onIntent(NotesUiIntent.SelectAll) }) {
-                            Icon(Icons.Outlined.DoneAll, contentDescription = "Select all")
+                            Icon(
+                                Icons.Outlined.DoneAll,
+                                contentDescription = stringResource(R.string.notes_cd_select_all),
+                            )
                         }
                         IconButton(onClick = { onIntent(NotesUiIntent.RequestExport) }) {
-                            Icon(Icons.Outlined.Download, contentDescription = "Export selected notes")
+                            Icon(
+                                Icons.Outlined.Download,
+                                contentDescription = stringResource(R.string.notes_cd_export_selected),
+                            )
                         }
                         IconButton(onClick = { onIntent(NotesUiIntent.RequestDeleteSelected) }) {
                             Icon(
                                 imageVector = Icons.Outlined.Delete,
-                                contentDescription = "Delete selected notes",
+                                contentDescription = stringResource(R.string.notes_cd_delete_selected),
                                 tint = MaterialTheme.colorScheme.error,
                             )
                         }
@@ -186,21 +252,25 @@ internal fun NotesScreen(
                 Text(
                     text =
                         if (state.selectedNoteIds.size == 1) {
-                            "Delete this note?"
+                            stringResource(R.string.notes_delete_one_confirm_title)
                         } else {
-                            "Delete ${state.selectedNoteIds.size} notes?"
+                            pluralStringResource(
+                                R.plurals.notes_delete_many_confirm_title,
+                                state.selectedNoteIds.size,
+                                state.selectedNoteIds.size,
+                            )
                         },
                 )
             },
-            text = { Text("This cannot be undone.") },
+            text = { Text(stringResource(R.string.notes_delete_cannot_undo)) },
             confirmButton = {
                 TextButton(onClick = { onIntent(NotesUiIntent.ConfirmDeleteSelected) }) {
-                    Text("Delete")
+                    Text(stringResource(R.string.notes_btn_delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { onIntent(NotesUiIntent.DismissDeleteSelected) }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.notes_btn_cancel))
                 }
             },
         )
@@ -216,7 +286,7 @@ private fun SearchField(
         value = query,
         onValueChange = onChange,
         leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-        placeholder = { Text("Search notes") },
+        placeholder = { Text(stringResource(R.string.notes_search_placeholder)) },
         singleLine = true,
         // Search queries often start with proper nouns ("Marco", "Federico") —
         // sentence capitalization here matches what the user will have written
@@ -248,7 +318,7 @@ private fun TagFilterRow(
             FilterChip(
                 selected = activeTag == null,
                 onClick = { onSelect(null) },
-                label = { Text("All") },
+                label = { Text(stringResource(R.string.notes_filter_all)) },
             )
         }
         items(items = tags, key = { it.value }) { tag ->
@@ -321,12 +391,17 @@ private fun NoteCard(
             // absolute layout could collapse to a 5-line vertical date column when
             // 3+ tags pushed it sideways; this puts it on its own row up top.
             Text(
-                text = formatRelativeTimestamp(note.createdAt, ZoneId.systemDefault()),
+                text =
+                    formatRelativeTimestamp(
+                        note.createdAt,
+                        ZoneId.systemDefault(),
+                        yesterday = stringResource(R.string.notes_yesterday),
+                    ),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = note.title.ifBlank { "Untitled" }.take(60),
+                text = note.title.ifBlank { stringResource(R.string.notes_untitled) }.take(60),
                 modifier = Modifier.padding(top = 2.dp),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
@@ -394,7 +469,9 @@ internal fun formatRelativeTimestamp(
     timestamp: Instant,
     zone: ZoneId,
     now: Instant = Instant.now(),
+    yesterday: String = "Yesterday",
 ): String {
+    val locale = java.util.Locale.getDefault()
     val noteZdt = timestamp.atZone(zone)
     val nowZdt = now.atZone(zone)
     val noteDate = noteZdt.toLocalDate()
@@ -403,10 +480,10 @@ internal fun formatRelativeTimestamp(
 
     return when {
         daysBetween == 0L -> noteZdt.format(TIME_ONLY)
-        daysBetween == 1L -> "Yesterday " + noteZdt.format(TIME_ONLY)
-        daysBetween in 2..6 -> noteZdt.format(WEEKDAY_TIME)
-        noteDate.year == today.year -> noteZdt.format(DATE_NO_YEAR)
-        else -> noteZdt.format(DATE_WITH_YEAR)
+        daysBetween == 1L -> "$yesterday " + noteZdt.format(TIME_ONLY)
+        daysBetween in 2..6 -> noteZdt.format(DateTimeFormatter.ofPattern("EEE HH:mm", locale))
+        noteDate.year == today.year -> noteZdt.format(DateTimeFormatter.ofPattern("d MMM", locale))
+        else -> noteZdt.format(DateTimeFormatter.ofPattern("d MMM yyyy", locale))
     }
 }
 
@@ -422,9 +499,9 @@ private fun EmptyState(
 ) {
     val message =
         when {
-            query.isNotBlank() -> "No notes match \"$query\"."
-            activeTag != null -> "No notes tagged #${activeTag.value} yet."
-            else -> "Tap the mic to capture your first thought."
+            query.isNotBlank() -> stringResource(R.string.notes_empty_no_match, query)
+            activeTag != null -> stringResource(R.string.notes_empty_no_tag, activeTag.value)
+            else -> stringResource(R.string.notes_empty_default)
         }
     Box(
         modifier = Modifier.fillMaxSize().padding(24.dp),

@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved — Prompt v11: English checkbox example + bold entity (2026-05-30)
+
+- Replaced Example B in `structure_note_v11.txt` (now active) with an English commitment note that explicitly demonstrates `"I need to / I should"` → `- [ ]` checkbox and `**bold**` entity. Previously, Examples A and C (both Italian) were the only checkbox demonstrations; the model occasionally used plain `- ` bullets for English commitment notes.
+- Companion fix: `en/reminder-call.expected.json` corrected — plain bullets → `- [ ]` checkboxes (the transcript contains "I need to call", "make sure to bring up", "ask her"), tags narrowed to broad-category values (`work`, `call`).
+- See `docs/prompt-evaluations/few-shot-en-checkbox-v11.md`.
+
+### Added — Full UI localisation in 6 languages (2026-05-30)
+
+- Extracted all hardcoded UI strings from `CaptureRoute`, `NoteDetailRoute`, `NotesRoute`, `OnboardingRoute`, `SettingsRoute`, `MainActivity`, and `RecordingForegroundService` into per-module `strings.xml` (≈90 strings across 5 feature modules + app).
+- Added `values-it`, `values-de`, `values-es`, `values-fr`, `values-pt` resource sets in every feature module. The app UI now adapts to the system language across all 6 supported locales. Key translations: phase labels (`Preparazione…` / `Transkription…` / `Transcribiendo…` / `Transcription…` / `Transcrevendo…`), action buttons (`Elimina / Löschen / Eliminar / Supprimer / Excluir`, `Annulla / Abbrechen / Cancelar / Annuler / Cancelar`), and the transcription privacy subtitle.
+
+### Added — Continuous-streaming ASR (Vosk) behind the existing seam (spike)
+
+- New `VoskSpeechToTextSession` owns the microphone via a single continuous `AudioRecord` and streams PCM frames into a Vosk recognizer. This eliminates the `SpeechRecognizer` segment gap that dropped words and emitted earcons during long, hands-free dictation — the recurring complaint when dictating long notes (e.g. in the car). See [ADR 0018](docs/decisions/0018-continuous-streaming-asr-vosk.md).
+- `FallbackSpeechToTextSession` routes to Vosk when a model is present for the language, and to the `SpeechRecognizer`-backed `AndroidSpeechToTextSession` otherwise, so devices without a model keep working.
+- `FileVoskModelProvider` resolves and caches the per-language model from `filesDir/vosk-models/<bcp47>`; `VoskResultParser` (pure, JVM-unit-tested) extracts the spoken text from Vosk's JSON.
+- Evolved the `:core:asr` privacy guard: `AudioRecord` is now permitted, but only in `VoskSpeechToTextSession`; all audio-persistence sinks stay banned and a new test asserts the PCM buffer is zeroed on stop. The cardinal rule (audio never leaves the device, never written to disk) is unchanged.
+- **Status: spike.** Needs an on-device build + validation on the Pixel 6a (push a model, then test long / in-car / multi-language dictation). ADR 0018 stays `Proposed` until validated.
+- Fixed a latent capture-screen layout bug exposed by long continuous dictation: the live transcript now sits in a weight-constrained, auto-scrolling area so it never pushes the record/discard controls off-screen.
+
+### Added — Hands-free / in-car capture plumbing (spike)
+
+- `BluetoothAudioRouter` routes capture to a connected Bluetooth headset mic (SCO/HFP) for in-car use, falling back to the phone mic (`MODIFY_AUDIO_SETTINGS` added). Note: BT headset audio is narrowband, which caps accuracy for any ASR engine.
+- `RecordingForegroundService` (type `microphone`) keeps capture alive while the screen is off / the app is backgrounded, with an ongoing "recording" notification; the capture screen starts/stops it following the Recording phase. Adds `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`, `POST_NOTIFICATIONS`.
+- Both reuse the existing continuous `AudioRecord` capture and are engine-agnostic — they carry over to the planned whisper path. Needs on-device validation on the Pixel 6a.
+
+### Added — Whisper migration phase 1: batch capture behind the seam (spike, `feature/asr-whisper`)
+
+- `BatchSpeechToTextSession` captures the whole dictation as PCM in RAM and transcribes it once at `stop()` via a `BatchTranscriber` — the shape the (window-based) whisper.cpp engine needs. Reuses the existing continuous `AudioRecord` capture, Bluetooth routing, and RMS waveform. No live transcript during recording (none is useful hands-free); the text arrives after stop. PCM is zeroed immediately after transcription — RAM only, never disk.
+- `FakeBatchTranscriber` (phase-1 placeholder) returns a fixed sentence so the record → transcribe → structure flow can be validated before the native engine lands. DI now wires the batch session; phase 2 swaps the transcriber for a whisper.cpp implementation (one-line change). The Vosk streaming path stays in the module, unwired, for reference.
+- Privacy guard updated: `AudioRecord` is now allowed in both designated capture sessions, and a test asserts every mic-owning file zeroes its PCM buffer.
+
+### Added — Whisper migration phase 2: native whisper.cpp transcriber (spike, `feature/asr-whisper`)
+
+- Vendored `whisper.cpp` (v1.8.5) as a git submodule under `core/asr/src/main/cpp/whisper.cpp`; a `CMakeLists.txt` builds it (+ ggml) via `add_subdirectory` alongside a small JNI bridge (`whisper_jni.cpp`). `:core:asr` gains `externalNativeBuild` (CMake) and an `arm64-v8a` ABI filter for the spike.
+- `WhisperContext` (Kotlin/JNI) + `WhisperBatchTranscriber` load a ggml model, transcribe the captured PCM in one shot, and free the model right after (so its memory isn't held during Gemma structuring). Language is pinned from the dictation language ("it") or "auto". DI swapped from the placeholder to the whisper transcriber.
+- Model: multilingual `ggml-base.bin` loaded from `<files>/whisper/`. Needs on-device build + validation on the Pixel 6a (native build will likely take a round of fixes); quality to be compared against Vosk on real dictation, especially English/code-switching.
+
+### Improved — Whisper UX and model selection (post-phase-2)
+
+- `WhisperBatchTranscriber` now auto-picks the best available model on device: prefers `ggml-small.bin` (better accuracy on long Italian + code-switching), then falls back to `ggml-base.bin`, then `ggml-tiny.bin`. Push the file you want; the app uses it without a rebuild.
+- New `Phase.Transcribing` UI: while whisper turns PCM into text, the screen shows a dedicated "Trascrizione…" indicator instead of hiding inside "Structuring…". The microphone foreground service stays alive across `Recording` and `Transcribing` so a screen-off stop can't let the OS kill the process mid-transcription.
+- Diagnosis from the first real tests (2026-05-28): Bluetooth headset audio (HFP/SCO, ~8–16 kHz narrowband) caps transcription quality regardless of engine — `phone-mic > Bluetooth` is inherent, not a regression. Phone-mic errors on long readings are the limit of `ggml-base.bin`; the `small` model is the next step up at the cost of ~2-3× transcription time.
+
+### Added — AudioRecord warm-up grace period ("Preparazione…" phase)
+
+- New `CaptureUiState.Phase.Preparing` sits between `AwaitingPermission` and `Recording`. The capture screen now shows a discreet "Preparazione…" indicator plus a small linear progress while AudioRecord's audio path warms up (~700–1000 ms on a Pixel 6a between `startRecording()` and the first non-silent PCM frame). Without this state, users who tapped the mic and started talking immediately lost the first one or two words — the audio path was technically running but producing silence/noise. The "Listening…" copy and the reactive `PulseRings` now only appear once the mic is actually capturing usable signal.
+- `SpeechToTextSession.audioReady: Flow<Boolean>` is a new contract signal — `BatchSpeechToTextSession` flips it to `true` on the first non-silent PCM frame. The ViewModel watches it (with a 1.5 s safety timeout for the totally-silent-user case) and transitions Preparing → Recording. Default implementation on the interface is `flowOf(true)` so non-batch sessions are unaffected.
+- Cancel/discard works from `Preparing` too: tapping the big red button or the "Discard" text affordance during the warm-up cleanly tears down the session and returns to Idle, without sending the (mostly silent) PCM through whisper.
+- The microphone foreground service now stays alive across `Preparing`, `Recording`, AND `Transcribing` — so the notification shade doesn't flicker on phase transitions and the OS can't throttle the process during the warm-up.
+- Two new unit tests in `CaptureViewModelTest`: `start recording lands in Preparing first…` (drives a `MutableStateFlow<Boolean>` for `audioReady` to observe the intermediate snapshot) and `cancel during preparing returns to Idle…`.
+
+### Productionization pass on the whisper / capture work
+
+- **Release ABIs restored.** `:core:asr` now packs `arm64-v8a` + `armeabi-v7a` + `x86_64` for the bundled whisper.cpp library, instead of the spike-only `arm64-v8a`. The app installs on 32-bit ARM legacy devices and on x86_64 emulator / Play Console review environments; `arm64-v8a` remains the primary target.
+- **Diagnostic logs stripped from release.** Single `-assumenosideeffects` directive in `app/proguard-rules.pro` removes `Log.v/d/i` (including the string concatenation in the call arguments) from the release APK while keeping them active in debug. `Log.e/w` still write to logcat — real failures stay visible. The `BatchSession`, `WhisperBatch`, `AsrBtRouter`, `AsrFallback`, `VoskModel` tags all survive intact for on-device troubleshooting on `assembleDebug`. See [ADR 0021](docs/decisions/0021-strip-info-logs-in-release.md).
+- **`BatchSpeechToTextSession` arithmetic pulled into a pure function.** The RMS-dB computation that drives the waveform and the `audioReady` signal is now `computeRmsDb(samples, length)` in the (newly `internal`) companion object — testable in plain JUnit without a device. The `AudioRecord`-dependent surface still needs an instrumented test; this is documented in the new `BatchSpeechToTextSessionTest`.
+- **README** gains a "Getting the whisper.cpp transcription model" section pointing to the recommended `ggml-small-q5_1.bin` and the `adb push … run-as cp` recipe so a new contributor can stand up the ASR path without spelunking the changelog.
+- KDoc cleanup on `BatchSpeechToTextSession` — dropped references to "phase 1" / "phase 2" / "spike" now that whisper is the wired engine.
+
+### Decisions
+
+- [ADR 0018](docs/decisions/0018-continuous-streaming-asr-vosk.md) — replace `SpeechRecognizer` with continuous-streaming Vosk (Proposed; supersedes the v2 direction of ADR 0003).
+- [ADR 0019](docs/decisions/0019-encryption-at-rest-decoupled-from-biometric.md) — always-on encryption at rest with a device-bound Keystore key, decoupled from the biometric lock (Proposed).
+- [ADR 0020](docs/decisions/0020-capture-warmup-preparing-phase.md) — `Phase.Preparing` for the AudioRecord warm-up window; transition driven by a first-non-silent signal with a 1.5 s safety timeout (Accepted).
+- [ADR 0021](docs/decisions/0021-strip-info-logs-in-release.md) — strip `Log.v/d/i` from the release build via R8 `-assumenosideeffects`, keep them in debug (Accepted).
+
 ## [1.0.1] - 2026-05-24
 
 ### Fixed — Critical crash on recording stop (release APK only)

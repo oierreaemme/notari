@@ -2,7 +2,7 @@
 
 *Voice notes that never leave your phone, structured by Gemma 4.*
 
-[![Build](https://img.shields.io/badge/build-pending-lightgrey)](.github/workflows/ci.yml)
+[![CI](https://github.com/oierreaemme/notari/actions/workflows/ci.yml/badge.svg)](https://github.com/oierreaemme/notari/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Min SDK](https://img.shields.io/badge/minSdk-28-green)](#)
 [![Privacy](https://img.shields.io/badge/network-zero-brightgreen)](#privacy)
@@ -195,6 +195,38 @@ adb push gemma-4-E2B-it.litertlm \
 
 The `ModelFileProvider` in `:app/AppModule.kt` resolves both locations
 (internal first, then external) — no app rebuild needed after pushing.
+
+### Getting the whisper.cpp transcription model
+
+ASR runs on a [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
+ggml model — also bundled separately (~60-470 MB depending on size and
+quantization), also never auto-downloaded. The native library is
+compiled into the APK; only the weights need to be provided.
+
+**Recommended default: `ggml-small-q5_1.bin`** (~180 MB) — q5_1 is a
+5-bit quantization that reaches `small`-level accuracy at ~2.5× the
+size compression. On Pixel-6a-class hardware it transcribes ~25 s of
+Italian + English code-switched speech well in 5-10 s. Download it from
+the
+[whisper.cpp Hugging Face mirror](https://huggingface.co/ggerganov/whisper.cpp/tree/main).
+
+`WhisperBatchTranscriber` auto-selects the best model present, in
+priority order: `ggml-small-q5_1.bin` → `ggml-small.bin` →
+`ggml-base-q5_1.bin` → `ggml-base.bin` → `ggml-tiny.bin`. Push
+whichever you prefer — no rebuild.
+
+```bash
+# debug variant
+adb push ggml-small-q5_1.bin /data/local/tmp/ggml-small-q5_1.bin
+adb shell run-as com.voicenotemd.debug mkdir -p files/whisper
+adb shell run-as com.voicenotemd.debug \
+  cp /data/local/tmp/ggml-small-q5_1.bin files/whisper/ggml-small-q5_1.bin
+adb shell rm /data/local/tmp/ggml-small-q5_1.bin
+```
+
+(End-user model import for whisper via SAF is the matching follow-up
+to ADR 0008 — currently the file is loaded from internal storage only,
+populated either via `adb push` as above or by future in-app import.)
 
 ### Build
 

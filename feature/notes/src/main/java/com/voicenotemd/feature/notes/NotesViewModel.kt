@@ -143,6 +143,8 @@ class NotesViewModel
                     }
                 NotesUiIntent.ClearSelection -> _uiState.update { it.copy(selectedNoteIds = emptySet()) }
                 NotesUiIntent.RequestExport -> viewModelScope.launch { _uiEvents.emit(NotesUiEvent.TriggerZipPicker) }
+                NotesUiIntent.RequestFolderExport ->
+                    viewModelScope.launch { _uiEvents.emit(NotesUiEvent.TriggerFolderPicker) }
                 NotesUiIntent.RequestDeleteSelected ->
                     _uiState.update {
                         if (it.selectedNoteIds.isEmpty()) it else it.copy(showDeleteSelectedConfirm = true)
@@ -187,17 +189,8 @@ class NotesViewModel
                 try {
                     val out = openStream() ?: return@launch
                     java.util.zip.ZipOutputStream(out).use { zos ->
-                        val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
                         notesToExport.forEach { note ->
-                            val dateStr = note.createdAt.atZone(java.time.ZoneId.systemDefault()).format(formatter)
-                            val safeTitle =
-                                note.title.replace(
-                                    Regex("[^a-zA-Z0-9_-]"),
-                                    "-",
-                                ).ifBlank { "Untitled" }.take(30)
-                            val filename = "${dateStr}_${safeTitle}_${note.id.take(6)}.md"
-
-                            val entry = java.util.zip.ZipEntry(filename)
+                            val entry = java.util.zip.ZipEntry(exportFilenameFor(note))
                             zos.putNextEntry(entry)
 
                             val content = note.toMarkdownWithFrontmatter()
@@ -213,6 +206,61 @@ class NotesViewModel
                     _uiEvents.emit(NotesUiEvent.ExportCompleted("Failed to export: ${e.message}"))
                 }
             }
+        }
+
+        /**
+         * Folder (Obsidian-vault) export: one frontmattered `.md` per note, written via
+         * [writeFile] — a Route-provided seam over the SAF tree the user picked, so this
+         * VM stays free of DocumentFile/ContentResolver and unit-testable. Exports the
+         * selection when one is active, the whole collection otherwise. Filenames are
+         * deterministic ([exportFilenameFor]), so re-exporting to the same vault updates
+         * the same files instead of accumulating copies (the Route deletes-then-creates).
+         */
+        fun exportToFolder(writeFile: (filename: String, content: String) -> Boolean) {
+            val allNotes = _uiState.value.notes
+            val selectedIds = _uiState.value.selectedNoteIds
+            val notesToExport =
+                if (selectedIds.isEmpty()) allNotes else allNotes.filter { selectedIds.contains(it.id) }
+            if (notesToExport.isEmpty()) return
+
+            viewModelScope.launch(ioDispatcher) {
+                try {
+                    var written = 0
+                    notesToExport.forEach { note ->
+                        if (writeFile(exportFilenameFor(note), note.toMarkdownWithFrontmatter())) {
+                            written++
+                        }
+                    }
+                    val message =
+                        if (written == notesToExport.size) {
+                            "Exported $written notes to the folder."
+                        } else {
+                            "Exported $written of ${notesToExport.size} notes — some files could not be written."
+                        }
+                    _uiEvents.emit(NotesUiEvent.ExportCompleted(message))
+                    _uiState.update { it.copy(selectedNoteIds = emptySet()) }
+                } catch (e: Exception) {
+                    _uiEvents.emit(NotesUiEvent.ExportCompleted("Failed to export: ${e.message}"))
+                }
+            }
+        }
+
+        /**
+         * Deterministic, filesystem-safe export filename: `YYYY-MM-DD_title_id6.md`.
+         * Deterministic on purpose — re-exports overwrite rather than duplicate. Shared
+         * by the ZIP and folder exports so both produce identical names.
+         */
+        private fun exportFilenameFor(note: com.voicenotemd.core.common.domain.Note): String {
+            val dateStr =
+                note.createdAt
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+            val safeTitle =
+                note.title
+                    .replace(Regex("[^a-zA-Z0-9_-]"), "-")
+                    .ifBlank { "Untitled" }
+                    .take(30)
+            return "${dateStr}_${safeTitle}_${note.id.take(6)}.md"
         }
 
         // Rendering moved to `Note.toMarkdownWithFrontmatter()` in :core:common so the

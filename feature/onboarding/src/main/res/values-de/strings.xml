@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_btn_skip">Überspringen</string>
+    <string name="onboarding_btn_next">Weiter</string>
+    <string name="onboarding_btn_get_started">Loslegen</string>
+    <string name="onboarding_page1_headline">Sprich.</string>
+    <string name="onboarding_page1_body">Tippe auf das Mikrofon und diktiere natürlich. Den Rest erledigen wir.</string>
+    <string name="onboarding_page2_headline">Wir machen Markdown daraus.</string>
+    <string name="onboarding_page2_body">Gemma 4 verwandelt deine Stimme in eine saubere, strukturierte Notiz — Titel, Tags, Daten, Inhalt. Alles auf deinem Telefon.</string>
+    <string name="onboarding_page3_headline">Audio verlässt dein Telefon nie.</string>
+    <string name="onboarding_page3_body">Keine INTERNET-Berechtigung. Keine Cloud. Der Aufnahmepuffer wird im RAM gehalten und gelöscht, sobald er transkribiert wurde.</string>
+</resources>

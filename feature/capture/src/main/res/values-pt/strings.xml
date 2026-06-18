@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="capture_app_name">Notari</string>
+    <string name="capture_phase_preparing">Preparando…</string>
+    <string name="capture_phase_transcribing">Transcrevendo…</string>
+    <string name="capture_cd_cancel_preparing">Cancelar preparação</string>
+    <string name="capture_cd_type_note">Digitar nota</string>
+    <string name="capture_cd_notes">Notas</string>
+    <string name="capture_cd_settings">Configurações</string>
+    <string name="capture_cd_change_language">Alterar idioma de ditado</string>
+    <string name="capture_cd_stop_recording">Parar gravação</string>
+    <string name="capture_cd_start_recording">Iniciar gravação</string>
+    <string name="capture_text_input_placeholder">Anote rapidamente, deixe o Gemma estruturar…</string>
+    <string name="capture_btn_process_with_ai">Processar com IA</string>
+    <string name="capture_lang_auto_label">Auto (idioma do telefone)</string>
+    <string name="capture_lang_auto_description">Usa o idioma do telefone — selecione um abaixo se ditar em outro idioma</string>
+    <string name="capture_btn_set_up">Configurar</string>
+    <string name="capture_btn_discard">Descartar</string>
+    <string name="capture_label_title">Título</string>
+    <string name="capture_label_body">Corpo</string>
+    <string name="capture_btn_save_note">Salvar nota</string>
+    <string name="capture_notification_title">Notari está gravando</string>
+    <string name="capture_notification_text">O áudio fica neste dispositivo.</string>
+    <string name="capture_notification_channel_name">Gravação</string>
+    <string name="capture_notification_channel_description">Exibida enquanto o Notari grava uma nota de voz.</string>
+    <string name="capture_sheet_title_silent_mic">Microfone silencioso</string>
+    <string name="capture_sheet_title_dictation_language">Idioma de ditado</string>
+    <string name="capture_structuring_your_note">Estruturando sua nota…</string>
+    <string name="capture_mic_stabilizing">Microfone estabilizando — fale em instantes.</string>
+    <string name="capture_structuring_elapsed">%1$ds decorridos</string>
+    <string name="capture_transcribing_subtitle">O áudio está virando texto. Fica no dispositivo.</string>
+    <string name="capture_structuring_info">Gemma 4 E2B está rodando localmente no seu dispositivo. O tempo de estruturação depende do hardware (tipicamente 20–90 s, mais longo em telefones mais antigos sem aceleração GPU). Seu áudio e transcrição nunca saem do telefone.</string>
+    <string name="capture_long_note_warning">Nota longa — a estruturação pode demorar um pouco mais e simplificar trechos longos.</string>
+    <string name="capture_structuring_failed_banner">Salva como texto simples — estruturação automática não está disponível agora.</string>
+    <string name="capture_fallback_snackbar">Não foi possível estruturar automaticamente — salva como texto simples.</string>
+    <string name="capture_listening">Ouvindo…</string>
+    <string name="capture_tap_to_append">Toque no microfone para adicionar à nota…</string>
+    <string name="capture_tap_to_capture">Toque no microfone para capturar seu primeiro pensamento.</string>
+    <string name="capture_setup_both_models">Importe os modelos de transcrição e estruturação para começar. Até lá, o ditado não produzirá texto.</string>
+    <string name="capture_setup_asr_only">Importe um modelo de transcrição para ditar. Sem ele, as gravações não podem ser convertidas em texto.</string>
+    <string name="capture_setup_gemma_only">Importe o modelo Gemma para notas estruturadas. Até lá, as notas são salvas como texto simples.</string>
+    <string name="mentions_section_header">Menções de data e hora</string>
+    <string name="mentions_unresolved">Não resolvido — referência vaga demais</string>
+    <string name="capture_lang_offline_hint">Se o ditado offline no seu idioma não retornar nada, instale o pacote de idioma correspondente em Configurações do Android → Sistema → Idiomas → Voz → Offline.</string>
+    <string name="capture_debug_last_response">Última resposta do modelo (depuração)</string>
+</resources>

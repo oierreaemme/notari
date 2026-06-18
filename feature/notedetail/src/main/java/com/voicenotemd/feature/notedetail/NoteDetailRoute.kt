@@ -16,16 +16,19 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -41,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -98,25 +102,56 @@ internal fun NoteDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (state.isEditing) "Edit note" else "Note") },
+                title = {
+                    Text(
+                        if (state.isEditing) {
+                            stringResource(
+                                R.string.notedetail_title_edit_note,
+                            )
+                        } else {
+                            stringResource(R.string.notedetail_title_note)
+                        },
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = stringResource(R.string.notedetail_cd_back),
+                        )
                     }
                 },
                 actions = {
                     if (!state.isEditing && state.note != null) {
+                        IconButton(
+                            onClick = { onIntent(NoteDetailUiIntent.Restructure) },
+                            enabled = !state.isRestructuring,
+                        ) {
+                            Icon(
+                                Icons.Outlined.AutoAwesome,
+                                contentDescription = stringResource(R.string.notedetail_cd_structure_with_ai),
+                            )
+                        }
                         IconButton(onClick = { onIntent(NoteDetailUiIntent.Share) }) {
-                            Icon(Icons.Outlined.Share, contentDescription = "Share as Markdown")
+                            Icon(
+                                Icons.Outlined.Share,
+                                contentDescription = stringResource(R.string.notedetail_cd_share),
+                            )
                         }
                         IconButton(onClick = { onIntent(NoteDetailUiIntent.AppendVoice) }) {
-                            Icon(Icons.Outlined.Mic, contentDescription = "Append voice note")
+                            Icon(
+                                Icons.Outlined.Mic,
+                                contentDescription = stringResource(R.string.notedetail_cd_append_voice),
+                            )
                         }
                         IconButton(onClick = { onIntent(NoteDetailUiIntent.EnterEdit) }) {
-                            Icon(Icons.Outlined.Edit, contentDescription = "Edit")
+                            Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.notedetail_cd_edit))
                         }
                         IconButton(onClick = { showDeleteConfirm = true }) {
-                            Icon(Icons.Outlined.Delete, contentDescription = "Delete")
+                            Icon(
+                                Icons.Outlined.Delete,
+                                contentDescription = stringResource(R.string.notedetail_cd_delete),
+                            )
                         }
                     }
                 },
@@ -138,16 +173,18 @@ internal fun NoteDetailScreen(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete this note?") },
-            text = { Text("This cannot be undone.") },
+            title = { Text(stringResource(R.string.notedetail_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.notedetail_delete_cannot_undo)) },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     onIntent(NoteDetailUiIntent.Delete)
-                }) { Text("Delete") }
+                }) { Text(stringResource(R.string.notedetail_btn_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                TextButton(
+                    onClick = { showDeleteConfirm = false },
+                ) { Text(stringResource(R.string.notedetail_btn_cancel)) }
             },
         )
     }
@@ -172,7 +209,7 @@ private fun NoteBody(
             OutlinedTextField(
                 value = state.draftTitle,
                 onValueChange = { onIntent(NoteDetailUiIntent.UpdateDraftTitle(it)) },
-                label = { Text("Title") },
+                label = { Text(stringResource(R.string.notedetail_label_title)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 modifier = Modifier.fillMaxWidth(),
@@ -180,7 +217,7 @@ private fun NoteBody(
             OutlinedTextField(
                 value = state.draftBody,
                 onValueChange = { onIntent(NoteDetailUiIntent.UpdateDraftBody(it)) },
-                label = { Text("Body") },
+                label = { Text(stringResource(R.string.notedetail_label_body)) },
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 modifier =
                     Modifier
@@ -196,20 +233,36 @@ private fun NoteBody(
                 horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
             ) {
                 TextButton(onClick = { onIntent(NoteDetailUiIntent.CancelEdit) }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.notedetail_btn_cancel))
                 }
                 Button(onClick = { onIntent(NoteDetailUiIntent.SaveEdit) }) {
-                    Text("Save")
+                    Text(stringResource(R.string.notedetail_btn_save))
                 }
             }
         } else {
-            Text(text = note.title.ifBlank { "Untitled" }, style = MaterialTheme.typography.headlineSmall)
+            // Plain-text note (structuring failed or was never run): offer an on-demand
+            // "Structure with AI" retry. The text itself is already safe in bodyMarkdown;
+            // this just upgrades it when the device is in better shape. See ADR 0022 follow-up.
+            if (!note.structured) {
+                RestructureBanner(
+                    isRestructuring = state.isRestructuring,
+                    error = state.restructureError,
+                    onRestructure = { onIntent(NoteDetailUiIntent.Restructure) },
+                )
+            }
             Text(
                 text =
-                    "Created " +
-                        note.createdAt
-                            .atZone(ZoneId.systemDefault())
-                            .format(DATE_FORMAT),
+                    note.title.ifBlank {
+                        stringResource(R.string.notedetail_untitled)
+                    },
+                style = MaterialTheme.typography.headlineSmall,
+            )
+            Text(
+                text =
+                    stringResource(
+                        R.string.notedetail_created_prefix,
+                        note.createdAt.atZone(ZoneId.systemDefault()).format(DATE_FORMAT),
+                    ),
                 modifier = Modifier.padding(top = 4.dp),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -249,7 +302,65 @@ private fun NoteBody(
             MentionsSection(
                 mentions = note.mentions,
                 modifier = Modifier.padding(top = 20.dp),
+                header = stringResource(R.string.mentions_section_header),
+                unresolvedLabel = stringResource(R.string.mentions_unresolved),
             )
+        }
+    }
+}
+
+/**
+ * Banner shown on a plain-text (unstructured) note offering an on-device "Structure with
+ * AI" retry. Shows a spinner while running and an inline retry hint if it didn't succeed.
+ */
+@Composable
+private fun RestructureBanner(
+    isRestructuring: Boolean,
+    error: String?,
+    onRestructure: () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = stringResource(R.string.notedetail_plain_text_banner),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (error != null) {
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            OutlinedButton(
+                onClick = onRestructure,
+                enabled = !isRestructuring,
+                modifier = Modifier.padding(top = 10.dp),
+            ) {
+                if (isRestructuring) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.height(18.dp).padding(end = 8.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Text(stringResource(R.string.notedetail_phase_structuring))
+                } else {
+                    Icon(
+                        Icons.Outlined.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.height(18.dp).padding(end = 8.dp),
+                    )
+                    Text(stringResource(R.string.notedetail_btn_structure_with_ai))
+                }
+            }
         }
     }
 }
@@ -260,7 +371,7 @@ private fun NotFoundView(padding: PaddingValues) {
         modifier = Modifier.fillMaxSize().padding(padding),
         contentAlignment = Alignment.Center,
     ) {
-        Text("This note no longer exists.")
+        Text(stringResource(R.string.notedetail_note_not_found))
     }
 }
 

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="capture_app_name">Notari</string>
+    <string name="capture_phase_preparing">Preparazione…</string>
+    <string name="capture_phase_transcribing">Trascrizione…</string>
+    <string name="capture_cd_cancel_preparing">Annulla preparazione</string>
+    <string name="capture_cd_type_note">Scrivi nota</string>
+    <string name="capture_cd_notes">Note</string>
+    <string name="capture_cd_settings">Impostazioni</string>
+    <string name="capture_cd_change_language">Cambia lingua di dettatura</string>
+    <string name="capture_cd_stop_recording">Ferma registrazione</string>
+    <string name="capture_cd_start_recording">Avvia registrazione</string>
+    <string name="capture_text_input_placeholder">Annota idee, lascia che Gemma le strutturi…</string>
+    <string name="capture_btn_process_with_ai">Elabora con IA</string>
+    <string name="capture_lang_auto_label">Auto (lingua del telefono)</string>
+    <string name="capture_lang_auto_description">Usa la lingua del telefono — scegline una qui sotto se detti in un\'altra</string>
+    <string name="capture_btn_set_up">Configura</string>
+    <string name="capture_btn_discard">Scarta</string>
+    <string name="capture_label_title">Titolo</string>
+    <string name="capture_label_body">Corpo</string>
+    <string name="capture_btn_save_note">Salva nota</string>
+    <string name="capture_notification_title">Notari sta registrando</string>
+    <string name="capture_notification_text">L\'audio resta su questo dispositivo.</string>
+    <string name="capture_notification_channel_name">Registrazione</string>
+    <string name="capture_notification_channel_description">Mostrata mentre Notari registra una nota vocale.</string>
+    <string name="capture_sheet_title_silent_mic">Microfono silenzioso</string>
+    <string name="capture_sheet_title_dictation_language">Lingua di dettatura</string>
+    <string name="capture_structuring_your_note">Strutturazione della nota…</string>
+    <string name="capture_mic_stabilizing">Microfono in avviamento — parla tra un momento.</string>
+    <string name="capture_structuring_elapsed">%1$ds trascorsi</string>
+    <string name="capture_transcribing_subtitle">L\'audio sta diventando testo. Resta sul telefono.</string>
+    <string name="capture_structuring_info">Gemma 4 E2B è in esecuzione localmente sul dispositivo. Il tempo di strutturazione dipende dall\'hardware (tipicamente 20–90 s, più lungo su dispositivi meno recenti senza accelerazione GPU). L\'audio e la trascrizione non lasciano mai il telefono.</string>
+    <string name="capture_long_note_warning">Nota lunga — la strutturazione potrebbe richiedere più tempo e semplificare alcuni passaggi.</string>
+    <string name="capture_structuring_failed_banner">Salvata come testo normale — la strutturazione automatica non è disponibile al momento.</string>
+    <string name="capture_fallback_snackbar">Impossibile strutturare automaticamente — salvata come testo normale.</string>
+    <string name="capture_listening">In ascolto…</string>
+    <string name="capture_tap_to_append">Tocca il microfono per aggiungere alla nota…</string>
+    <string name="capture_tap_to_capture">Tocca il microfono per catturare il tuo primo pensiero.</string>
+    <string name="capture_setup_both_models">Importa i modelli di trascrizione e strutturazione per iniziare. Fino ad allora la dettatura non produrrà testo.</string>
+    <string name="capture_setup_asr_only">Importa un modello di trascrizione per dettare. Senza di esso le registrazioni non possono essere convertite in testo.</string>
+    <string name="capture_setup_gemma_only">Importa il modello Gemma per le note strutturate. Fino ad allora le note vengono salvate come testo normale.</string>
+    <string name="mentions_section_header">Riferimenti temporali</string>
+    <string name="mentions_unresolved">Non risolto — riferimento troppo vago</string>
+    <string name="capture_lang_offline_hint">Se la dettatura offline nella tua lingua non restituisce nulla, installa il pacchetto lingua corrispondente da Impostazioni Android → Sistema → Lingue → Riconoscimento vocale → Offline.</string>
+    <string name="capture_debug_last_response">Ultima risposta del modello (debug)</string>
+</resources>

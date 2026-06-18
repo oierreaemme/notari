@@ -17,5 +17,10 @@ abstract class VoiceNoteDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "voice_note.db"
+
+        // Keep in sync with the @Database(version = …) above. Used by the SQLCipher
+        // migrator when it opens the encrypted DB through the same SupportSQLiteOpenHelper
+        // path Room uses, so the verify step matches production exactly (ADR 0019).
+        const val SCHEMA_VERSION = 1
     }
 }

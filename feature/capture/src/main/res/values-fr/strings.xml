@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="capture_app_name">Notari</string>
+    <string name="capture_phase_preparing">Préparation…</string>
+    <string name="capture_phase_transcribing">Transcription…</string>
+    <string name="capture_cd_cancel_preparing">Annuler la préparation</string>
+    <string name="capture_cd_type_note">Taper une note</string>
+    <string name="capture_cd_notes">Notes</string>
+    <string name="capture_cd_settings">Paramètres</string>
+    <string name="capture_cd_change_language">Changer la langue de dictée</string>
+    <string name="capture_cd_stop_recording">Arrêter l\'enregistrement</string>
+    <string name="capture_cd_start_recording">Démarrer l\'enregistrement</string>
+    <string name="capture_text_input_placeholder">Notez rapidement, laissez Gemma structurer…</string>
+    <string name="capture_btn_process_with_ai">Traiter avec l\'IA</string>
+    <string name="capture_lang_auto_label">Auto (langue du téléphone)</string>
+    <string name="capture_lang_auto_description">Utilise la langue du téléphone — choisissez-en une ci-dessous si vous dictez dans une autre</string>
+    <string name="capture_btn_set_up">Configurer</string>
+    <string name="capture_btn_discard">Ignorer</string>
+    <string name="capture_label_title">Titre</string>
+    <string name="capture_label_body">Corps</string>
+    <string name="capture_btn_save_note">Enregistrer la note</string>
+    <string name="capture_notification_title">Notari enregistre</string>
+    <string name="capture_notification_text">L\'audio reste sur cet appareil.</string>
+    <string name="capture_notification_channel_name">Enregistrement</string>
+    <string name="capture_notification_channel_description">Affichée pendant que Notari enregistre une note vocale.</string>
+    <string name="capture_sheet_title_silent_mic">Micro silencieux</string>
+    <string name="capture_sheet_title_dictation_language">Langue de dictée</string>
+    <string name="capture_structuring_your_note">Structuration de la note…</string>
+    <string name="capture_mic_stabilizing">Micro en cours de stabilisation — parlez dans un instant.</string>
+    <string name="capture_structuring_elapsed">%1$ds écoulées</string>
+    <string name="capture_transcribing_subtitle">L\'audio devient du texte. Reste sur l\'appareil.</string>
+    <string name="capture_structuring_info">Gemma 4 E2B s\'exécute localement sur votre appareil. Le temps de structuration dépend du matériel (généralement 20–90 s, plus long sur les anciens téléphones sans accélération GPU). Votre audio et votre transcription ne quittent jamais le téléphone.</string>
+    <string name="capture_long_note_warning">Note longue — la structuration peut prendre un peu plus de temps et simplifier de longs passages.</string>
+    <string name="capture_structuring_failed_banner">Enregistrée en texte brut — la structuration automatique n\'est pas disponible pour l\'instant.</string>
+    <string name="capture_fallback_snackbar">Impossible de structurer automatiquement — enregistrée en texte brut.</string>
+    <string name="capture_listening">Écoute en cours…</string>
+    <string name="capture_tap_to_append">Appuyez sur le micro pour ajouter à la note…</string>
+    <string name="capture_tap_to_capture">Appuyez sur le micro pour capturer votre première pensée.</string>
+    <string name="capture_setup_both_models">Importez les modèles de transcription et de structuration pour commencer. En attendant, la dictée ne produira pas de texte.</string>
+    <string name="capture_setup_asr_only">Importez un modèle de transcription pour dicter. Sans lui, les enregistrements ne peuvent pas être convertis en texte.</string>
+    <string name="capture_setup_gemma_only">Importez le modèle Gemma pour des notes structurées. En attendant, les notes sont enregistrées en texte brut.</string>
+    <string name="mentions_section_header">Mentions de date et heure</string>
+    <string name="mentions_unresolved">Non résolu — référence trop vague</string>
+    <string name="capture_lang_offline_hint">Si la dictée hors ligne dans votre langue ne renvoie rien, installez le pack de langue correspondant depuis Paramètres Android → Système → Langues → Saisie vocale → Hors ligne.</string>
+    <string name="capture_debug_last_response">Dernière réponse du modèle (débogage)</string>
+</resources>

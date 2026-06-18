@@ -9,6 +9,8 @@ import com.voicenotemd.core.common.domain.Tag
 import com.voicenotemd.core.common.result.DomainResult
 import com.voicenotemd.core.common.usecase.StructureNoteUseCase
 import com.voicenotemd.core.common.usecase.StructuringResult
+import com.voicenotemd.core.inference.normalize.CommitmentDeduplicator
+import com.voicenotemd.core.inference.normalize.DeterministicMentionScanner
 import com.voicenotemd.core.inference.normalize.MarkdownBodyFormatter
 import com.voicenotemd.core.inference.normalize.RelativeDateTimeResolver
 import com.voicenotemd.core.inference.normalize.TagValidator
@@ -55,12 +57,18 @@ class StructureNoteUseCaseImpl(
         forceLanguage: Language?,
         existingTags: List<String>,
     ): StructuringResult {
+        // Treat Language.Unknown as "no pin" (auto-detect). A non-null Unknown would
+        // otherwise wrap the prompt in a nonsensical "LANGUAGE LOCK … Unknown (und)"
+        // directive AND skip language detection in buildStructuredNote. This reaches us
+        // from NoteDetailViewModel.handleRestructure, which forwards the note's stored
+        // language verbatim — and a plain-text note's language can be Unknown.
+        val pinnedLanguage = forceLanguage?.takeIf { it != Language.Unknown }
         val cleaned = transcript.trim()
         if (cleaned.isEmpty()) {
             // Defensive: the capture flow guards against this, but we still want a sane
             // fallback rather than producing a blank note that confuses the user.
             return StructuringResult(
-                note = plainTextFallback(cleaned, forceLanguage),
+                note = plainTextFallback(cleaned, pinnedLanguage),
                 lastRawResponse = null,
             )
         }
@@ -114,9 +122,14 @@ class StructureNoteUseCaseImpl(
         // language title or foreign tags on a short note (real device, 2026-05-22).
         // With no pin, the base prompt's own "detect the language" rule applies.
         val effectiveBase: PromptTemplate =
-            forceLanguage?.let { LanguageScopedPromptTemplate(basePrompt, it) } ?: basePrompt
+            pinnedLanguage?.let { LanguageScopedPromptTemplate(basePrompt, it) } ?: basePrompt
         val stricterPrompt = StricterPromptTemplate(effectiveBase)
         val backend = session.backend()
+        // Surfaced on every result so the UI can show the one-time "running on CPU"
+        // advisory (ADR 0016 UX follow-up): the user deserves to know why the same
+        // app is slower on their hardware. UNKNOWN is not reported as CPU — no engine
+        // was loaded, so there is nothing meaningful to advise about.
+        val cpuFallback = backend == InferenceBackend.CPU
         val pass1Budget = coldStartBudgetFor(cleaned, backend)
         val pass1Outcome =
             runCatching {
@@ -130,13 +143,14 @@ class StructureNoteUseCaseImpl(
                 pass1Outcome.exceptionOrNull()?.let { "exception: ${it.message}" }
                     ?: "timeout after ${pass1Budget}ms"
             return StructuringResult(
-                note = plainTextFallback(cleaned, forceLanguage),
+                note = plainTextFallback(cleaned, pinnedLanguage),
                 lastRawResponse = "Pass 1 failed ($reason)",
+                cpuFallback = cpuFallback,
             )
         }
         lastRaw = pass1Raw
-        tryBuildStructuredNote(pass1Raw, cleaned, forceLanguage, existingTags)
-            ?.let { return StructuringResult(note = it, lastRawResponse = null) }
+        tryBuildStructuredNote(pass1Raw, cleaned, pinnedLanguage)
+            ?.let { return StructuringResult(note = it, lastRawResponse = null, cpuFallback = cpuFallback) }
 
         // Pass 2 — stricter prompt. Engine is now warm so we drop the engine-load
         // overhead, but the prefill cost still scales with transcript length and
@@ -152,8 +166,8 @@ class StructureNoteUseCaseImpl(
         val pass2Raw: String? = pass2Outcome.getOrNull()
         if (pass2Raw != null) {
             lastRaw = pass2Raw
-            tryBuildStructuredNote(pass2Raw, cleaned, forceLanguage, existingTags)
-                ?.let { return StructuringResult(note = it, lastRawResponse = null) }
+            tryBuildStructuredNote(pass2Raw, cleaned, pinnedLanguage)
+                ?.let { return StructuringResult(note = it, lastRawResponse = null, cpuFallback = cpuFallback) }
         } else {
             val pass2Reason =
                 pass2Outcome.exceptionOrNull()?.let { "exception: ${it.message}" }
@@ -164,8 +178,9 @@ class StructureNoteUseCaseImpl(
         // Both passes failed. Save the transcript verbatim so the user keeps the content,
         // and surface the last raw response so the UI can show what actually came back.
         return StructuringResult(
-            note = plainTextFallback(cleaned, forceLanguage),
+            note = plainTextFallback(cleaned, pinnedLanguage),
             lastRawResponse = lastRaw,
+            cpuFallback = cpuFallback,
         )
     }
 
@@ -173,14 +188,13 @@ class StructureNoteUseCaseImpl(
         raw: String,
         transcript: String,
         forceLanguage: Language?,
-        existingTags: List<String>,
     ): Note? {
         val parsed =
             when (val r = parser.parse(raw)) {
                 is DomainResult.Success -> r.value
                 is DomainResult.Failure -> return null
             }
-        return buildStructuredNote(parsed, transcript, forceLanguage, existingTags)
+        return buildStructuredNote(parsed, transcript, forceLanguage)
     }
 
     /**
@@ -189,8 +203,9 @@ class StructureNoteUseCaseImpl(
      *
      *  1. `RelativeDateTimeResolver` overrides Gemma's `iso_resolved` on simple
      *     multilingual relative expressions ("stasera", "tonight", "domani sera"…).
-     *  2. `TagValidator` strips tags that have no anchor in the transcript or in
-     *     the user's prior corpus — kills hallucinated tags.
+     *  2. `TagValidator` strips tags that have no anchor in the transcript —
+     *     kills hallucinated tags (corpus consistency is handled upstream in
+     *     the prompt's EXISTING_TAGS, not here).
      *  3. `MarkdownBodyFormatter` enforces line breaks before checkboxes/bullets
      *     and collapses excess blank lines.
      *  4. Title sanitization strips trailing punctuation and caps length.
@@ -203,7 +218,6 @@ class StructureNoteUseCaseImpl(
         s: StructuredNote,
         transcript: String,
         forceLanguage: Language?,
-        existingTags: List<String>,
     ): Note {
         val now = Instant.now(clock)
         val resolvedLanguage =
@@ -218,14 +232,26 @@ class StructureNoteUseCaseImpl(
         //    showed a "null" datetime chip). These carry no information and must never
         //    surface in the UI. A genuinely vague-but-real phrase ("una di queste sere")
         //    has a real surface_form and is kept, resolving to null by design.
-        val mentions =
+        val modelMentions =
             s.mentions
                 .filter { it.surfaceForm.isJunkDateSurface().not() }
                 .map { resolveMention(it, s.languageBcp47, now) }
+        // Deterministic backstop (review 2026-06-10): when the model emitted NO
+        // mentions, scan the transcript for unambiguous future-oriented datetime
+        // references ("entro venerdì", "domani alle 15") and resolve them with the
+        // ADR 0015 machinery. Surface forms are literal transcript substrings —
+        // nothing is invented. When the model DID emit mentions, its judgment wins.
+        val mentions =
+            modelMentions.ifEmpty {
+                DeterministicMentionScanner.scan(transcript, s.languageBcp47, now)
+                    .map { DateMention(surfaceForm = it.surfaceForm, resolved = it.resolved) }
+            }
 
-        // 2. Tags: hallucination guard against the transcript + prior corpus.
+        // 2. Tags: hallucination guard against the transcript. The prior corpus
+        //    steers tag *generation* upstream in the prompt (EXISTING_TAGS, ADR 0012);
+        //    this downstream guard is a pure backstop and does not re-consult it.
         val rawTags = s.tags.mapNotNull(Tag::normalize).distinct()
-        val validatedTags = TagValidator.validate(rawTags, transcript, existingTags)
+        val validatedTags = TagValidator.validate(rawTags, transcript)
 
         // 4. Title: strip trailing punctuation that the model occasionally adds
         //    ("Riunione con Marco." or "Domani?"), then cap. (Computed before the
@@ -240,10 +266,19 @@ class StructureNoteUseCaseImpl(
         // 3. Body: drop a leading `# Title` heading E2B sometimes repeats despite
         //    the prompt forbidding it (the title is a separate field, and the
         //    exporter adds its own H1), then enforce checkbox/bullet line breaks
-        //    and collapse blank lines.
+        //    and collapse blank lines. After the lines are normalized, remove
+        //    prose sentences that duplicate a checkbox (CommitmentDeduplicator —
+        //    the model re-emits commitments in both shapes despite v13/v14's
+        //    rules; round-4 eval 2026-06-10), then re-format to collapse the
+        //    blank lines the removal may leave behind. Every pass is
+        //    content-preserving.
         val formattedBody =
             MarkdownBodyFormatter.format(
-                stripDuplicateTitleHeading(s.bodyMarkdown, cleanedTitle),
+                CommitmentDeduplicator.dedupe(
+                    MarkdownBodyFormatter.format(
+                        stripDuplicateTitleHeading(s.bodyMarkdown, cleanedTitle),
+                    ),
+                ),
             )
 
         return Note(
@@ -260,26 +295,32 @@ class StructureNoteUseCaseImpl(
     }
 
     /**
-     * Drop a leading `# Heading` from [body] when its text matches [title].
+     * Drop a leading first line from [body] when it merely repeats [title] — either
+     * as a `# Heading` or as a plain prose echo ("Lista della spesa." as the first
+     * body line, real-device 2026-06-10). The title is a separate field and the
+     * exporter prepends its own `# Title`, so the echo shows the title twice.
      *
-     * The prompt forbids repeating the title as a top-level heading (the title is
-     * a separate field, and the exporter prepends its own `# Title`), but E2B
-     * occasionally emits it anyway — which shows the title twice in the note
-     * detail view. Stripping it is content-preserving: the title is already kept
-     * in the title field. Only an exact (case-insensitive) match is removed, so a
-     * genuine, different section heading at the top is left untouched.
+     * Content-preserving: the text survives in the title field, and only an exact
+     * (case-insensitive, trailing-punctuation-insensitive) match is removed — a
+     * genuine first sentence that happens to START like the title is left intact.
      */
     private fun stripDuplicateTitleHeading(
         body: String,
         title: String,
     ): String {
+        val titleText = title.trim()
+        if (titleText.isEmpty()) return body
         val trimmed = body.trimStart()
-        if (!trimmed.startsWith("#")) return body
         val newlineIdx = trimmed.indexOf('\n')
         val firstLine = if (newlineIdx < 0) trimmed else trimmed.substring(0, newlineIdx)
-        val headingText = firstLine.trimStart('#').trim()
-        val titleText = title.trim()
-        if (titleText.isEmpty() || !headingText.equals(titleText, ignoreCase = true)) return body
+        val lineText =
+            firstLine
+                .trimStart('#')
+                .trim()
+                .trimEnd(*TRAILING_TITLE_PUNCTUATION)
+                .trim()
+        val normalizedTitle = titleText.trimEnd(*TRAILING_TITLE_PUNCTUATION).trim()
+        if (!lineText.equals(normalizedTitle, ignoreCase = true)) return body
         return if (newlineIdx < 0) "" else trimmed.substring(newlineIdx + 1).trimStart()
     }
 
@@ -319,6 +360,23 @@ class StructureNoteUseCaseImpl(
                     ?.takeIf(String::isNotBlank)
                     ?.let(::tryParseInstant)
                     ?.let { RelativeDateTimeResolver.biasToFuture(it, raw.surfaceForm, now) }
+                    // Last resort (real-device 2026-06-10: "domani alle 15" emitted with
+                    // iso null): run the deterministic scanner ON THE SURFACE FORM itself.
+                    // It handles the compound day+time merge the simple-table resolver
+                    // refuses. Accepted ONLY when the scan covers the WHOLE surface —
+                    // a partial match ("Friday" inside "the third Friday of the month")
+                    // means the full phrase carries extra semantics the scanner cannot
+                    // honor; resolving from the fragment would be wrong, so it stays
+                    // null per the "genuinely vague" contract.
+                    ?: DeterministicMentionScanner.scan(raw.surfaceForm, languageBcp47, now)
+                        .firstOrNull()
+                        ?.takeIf { scanned ->
+                            scanned.surfaceForm.trim().equals(
+                                raw.surfaceForm.trim().trimEnd('.', ',', ';', '!', '?').trim(),
+                                ignoreCase = true,
+                            )
+                        }
+                        ?.resolved
             }
         return DateMention(surfaceForm = raw.surfaceForm, resolved = resolved)
     }
@@ -331,7 +389,14 @@ class StructureNoteUseCaseImpl(
      */
     private fun String.isJunkDateSurface(): Boolean {
         val s = trim().trim('"').trim()
-        return s.isEmpty() || s.equals("null", ignoreCase = true) || s.equals("none", ignoreCase = true)
+        return s.isEmpty() ||
+            s.equals("null", ignoreCase = true) ||
+            s.equals("none", ignoreCase = true) ||
+            // A surface with no letters ("2" from "il 2 o 21" — real device 2026-06-10)
+            // is never a complete datetime reference: bare numbers are ambiguous noise
+            // and render as meaningless chips. Real surfaces always carry a word
+            // ("alle 15", "domani", "entro venerdì").
+            s.none { it.isLetter() }
     }
 
     private fun tryParseInstant(iso: String): Instant? {
@@ -375,7 +440,13 @@ class StructureNoteUseCaseImpl(
             title = title,
             bodyMarkdown = transcript.ifBlank { "" },
             tags = emptyList(),
-            mentions = emptyList(),
+            // Even an unstructured note deserves its datetime chips when the
+            // transcript carries unambiguous references ("sabato" in the round-4
+            // "due cose" fallback, 2026-06-10): the deterministic scanner is
+            // model-free, so it works exactly the same on the fallback path.
+            mentions =
+                DeterministicMentionScanner.scan(transcript, forceLanguage?.bcp47, now)
+                    .map { DateMention(surfaceForm = it.surfaceForm, resolved = it.resolved) },
             language = forceLanguage ?: Language.Unknown,
             createdAt = now,
             updatedAt = now,

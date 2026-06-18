@@ -40,6 +40,14 @@ sealed interface NotesUiIntent {
 
     data object RequestExport : NotesUiIntent
 
+    /**
+     * Export notes as individual .md files into a user-picked folder (SAF tree) — the
+     * Obsidian-vault flow: pick the vault directory once, every note lands as a
+     * frontmattered Markdown file the vault indexes natively. Exports the selection
+     * when one is active, the whole collection otherwise.
+     */
+    data object RequestFolderExport : NotesUiIntent
+
     /** User tapped the trash icon while in selection mode → show the confirm dialog. */
     data object RequestDeleteSelected : NotesUiIntent
 
@@ -52,6 +60,9 @@ sealed interface NotesUiIntent {
 
 sealed interface NotesUiEvent {
     data object TriggerZipPicker : NotesUiEvent
+
+    /** Open the SAF directory picker for the folder (Obsidian vault) export. */
+    data object TriggerFolderPicker : NotesUiEvent
 
     data class ExportCompleted(val message: String) : NotesUiEvent
 

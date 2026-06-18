@@ -12,42 +12,42 @@ import java.util.Locale
  * and sync meetings, where "rag" came from a prior corpus entry but had no
  * connection to the current note's content.
  *
- * The deterministic rule (see ADR 0015):
+ * The deterministic rule (current policy, 2026-05-16 — after the earlier
+ * corpus-anchoring rule produced 75% empty tag arrays in the field):
  *
- *  A tag is KEPT if any of the following is true:
- *   1. The tag's normalized text appears as a substring inside the transcript
- *      (case-insensitive). This catches both literal mentions ("riunione") and
- *      kebab tags whose root word appears as plain text in the body
- *      (`"app-development"` kept if the transcript mentions "app").
- *   2. The tag is in the EXISTING_TAGS list AND the transcript contains *any*
- *      semantic anchor we can detect — at minimum, the leading "head word" of
- *      the tag (everything before the first hyphen) appears in the transcript.
- *      So `"app-development"` is kept against a transcript mentioning "app",
- *      but the standalone `"rag"` is dropped if "rag" isn't in the transcript
- *      at all.
+ *  - **Multi-part kebab tag** (`app-development`, `ai-research`): KEPT only if
+ *    any part ≥3 chars appears as a standalone word in the transcript. The
+ *    word-boundary check stops "app" from matching inside "appuntamento".
+ *  - **Mono-part tag ≥4 chars** (`lavoro`, `personale`, `sogni`): TRUSTED and
+ *    kept unconditionally — these are semantic abstractions that legitimately
+ *    have no literal anchor in the transcript. The ~1-in-20 hallucinated long
+ *    tag that slips through is the accepted price of not shipping mostly-empty
+ *    tag arrays (the single worst tag-discoverability outcome).
+ *  - **Mono-part tag ≤3 chars** (`rag`, `seo`, `ai`): KEPT only if it appears
+ *    as a standalone word. Short tags are both likelier to be context-bleed
+ *    hallucinations and likelier to false-match if allowed loose.
  *
- *  Everything else is silently stripped — the user never sees a tag that the
- *  model fabricated from context that didn't exist.
+ * Everything else is silently stripped — the user never sees a tag the model
+ * fabricated from context that didn't exist.
  *
- * This is intentionally conservative: it preserves Gemma's freedom to
- * abstract ("seo-optimization" tag on a note that says "ottimizzazione per
- * Google") only when the EXISTING_TAGS list already endorses that abstraction.
- * For brand-new tags the rule demands a literal anchor.
+ * **Why no corpus argument.** The user's prior tag vocabulary (EXISTING_TAGS)
+ * steers tag *generation* upstream, in the prompt — see `StaticPromptTemplate`'s
+ * `{{EXISTING_TAGS}}` marker (ADR 0012). This validator runs *downstream* as a
+ * pure hallucination backstop, so it deliberately does not re-consult the
+ * corpus: doing so was the lexical-anchoring rule that caused the 75%-empty
+ * regression. Reintroducing corpus anchoring here would be a behavioural change
+ * to gate behind a prompt-eval, not a free win.
  */
 object TagValidator {
     /**
-     * Validate [tags] against the [transcript] they came from, using
-     * [existingTagsCorpus] as the user's prior vocabulary. Returns the filtered,
-     * de-duplicated list preserving order.
+     * Validate [tags] against the [transcript] they came from. Returns the
+     * filtered, de-duplicated list preserving order.
      *
-     * `transcript` is matched case-insensitively. `existingTagsCorpus` strings
-     * are compared after normalizing through `Tag.normalize` so the comparison
-     * uses the canonical kebab form.
+     * `transcript` is matched case-insensitively and accent-folded first.
      */
     fun validate(
         tags: List<Tag>,
         transcript: String,
-        existingTagsCorpus: List<String>,
     ): List<Tag> {
         if (tags.isEmpty()) return tags
         // Strip accents from the transcript so an ASCII kebab tag like "perche"
@@ -57,18 +57,13 @@ object TagValidator {
         // This handles all 6 v1 languages — it/es/fr/de/pt all carry accent
         // marks on common words. Normalization runs once per validation call.
         val transcriptFolded = foldForMatching(transcript)
-        val existingNormalized =
-            existingTagsCorpus
-                .mapNotNull(Tag.Companion::normalize)
-                .map { it.value }
-                .toSet()
 
         val out = ArrayList<Tag>(tags.size)
         val seen = HashSet<String>(tags.size)
         for (tag in tags) {
             val value = tag.value
             if (!seen.add(value)) continue
-            if (isAnchored(value, transcriptFolded, existingNormalized)) {
+            if (isAnchored(value, transcriptFolded)) {
                 out += tag
             }
             // else: silently drop. We don't surface the rejection to the UI —
@@ -82,7 +77,6 @@ object TagValidator {
     private fun isAnchored(
         tagValue: String,
         transcriptFolded: String,
-        @Suppress("UNUSED_PARAMETER") existingNormalized: Set<String>,
     ): Boolean {
         // Multi-part kebab tag (e.g. "app-development", "seo-optimization"):
         // require any chunk ≥3 chars to appear as a STANDALONE WORD in the

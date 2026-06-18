@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notedetail_delete_confirm_title">¿Eliminar esta nota?</string>
+    <string name="notedetail_delete_cannot_undo">Esta acción no se puede deshacer.</string>
+    <string name="notedetail_btn_delete">Eliminar</string>
+    <string name="notedetail_btn_cancel">Cancelar</string>
+    <string name="notedetail_label_title">Título</string>
+    <string name="notedetail_label_body">Cuerpo</string>
+    <string name="notedetail_btn_save">Guardar</string>
+    <string name="notedetail_phase_structuring">Estructurando…</string>
+    <string name="notedetail_btn_structure_with_ai">Estructurar con IA</string>
+    <string name="notedetail_note_not_found">Esta nota ya no existe.</string>
+    <string name="notedetail_cd_back">Atrás</string>
+    <string name="notedetail_cd_structure_with_ai">Estructurar con IA</string>
+    <string name="notedetail_cd_share">Compartir como Markdown</string>
+    <string name="notedetail_cd_append_voice">Añadir nota de voz</string>
+    <string name="notedetail_cd_edit">Editar</string>
+    <string name="notedetail_cd_delete">Eliminar</string>
+    <string name="notedetail_title_edit_note">Editar nota</string>
+    <string name="notedetail_title_note">Nota</string>
+    <string name="notedetail_plain_text_banner">Esta nota se guardó como texto sin formato — la estructuración no se ejecutó.</string>
+    <string name="notedetail_untitled">Sin título</string>
+    <string name="mentions_section_header">Menciones de fecha y hora</string>
+    <string name="mentions_unresolved">Sin resolver: referencia demasiado vaga</string>
+    <string name="notedetail_created_prefix">Creado el %1$s</string>
+</resources>

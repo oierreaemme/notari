@@ -72,6 +72,10 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    // ProcessLifecycleOwner: drives the Gemma engine idle-release when the app is
+    // backgrounded (TRIM_MEMORY_COMPLETE is a no-op on API 34+ — ADR 0028). Pure
+    // lifecycle observation, no network.
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.startup.runtime)
     implementation(libs.androidx.window)

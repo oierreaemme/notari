@@ -110,7 +110,49 @@ class AssetPromptLoader(private val context: Context) {
          *
          * Earlier prompts stay in assets/ as legacy. To roll back, point this constant
          * at the prior version.
+         *
+         * v12 (prefill slim, 5.5 KB → 2.9 KB) was tried on 2026-06-10 and ROLLED BACK
+         * the same day: the on-device eval (10 dictated probes, results in
+         * docs/prompt-evaluations/v12-slim-prefill.md) showed checkbox recall
+         * regressing on 3 of 4 mixed-prose probes, enumerations rendered as
+         * checkboxes, `##` topic headings dropped, and one EN datetime mention lost.
+         * The de-duplicated rules + final checklist of v11 were load-bearing for the
+         * 2B-effective model — repetition IS the mechanism, not noise. With the GPU
+         * unlocked (ADR 0030) the prefill cost that motivated the slim is no longer
+         * the bottleneck on the reference device, so quality wins.
+         *
+         * v13 = v11 (full repetition + checklist kept) + the surgical formatting
+         * fixes from the same day's v11 eval round (user-confirmed choices,
+         * docs/prompt-evaluations/v13-formatting-fixes.md):
+         *  - COMPLETENESS rule: every transcript sentence survives (the "layout"
+         *    side-comment was being dropped) — also added to the FINAL CHECKLIST;
+         *  - buy/do lists are CHECKBOXES (user preference; aligns with what the
+         *    model already did), informational enumerations stay bullets; no
+         *    umbrella checkbox above list items;
+         *  - checkbox text starts with the verb (no leading "Devo/I need to");
+         *  - no prose+checkbox duplication of the same sentence;
+         *  - EXISTING_TAGS reuse only when topically pertinent;
+         *  - no title echo as first body line (also stripped deterministically in
+         *    StructureNoteUseCaseImpl);
+         *  - paragraph break every 3-4 sentences on long prose.
+         * Code-side companions: DeterministicMentionScanner backstop (mentions
+         * recovered from the transcript when the model emits none) and the extended
+         * title-echo strip.
+         *
+         * v14 (2026-06-10, round-3 eval of v13): v13's COMPLETENESS rule worked — no
+         * more dropped sentences — but it conflicted with the no-duplication rule and
+         * the model resolved the tension by keeping commitments BOTH as prose AND as
+         * checkbox (4 of 10 notes). v14 makes survival exclusive: every sentence
+         * survives EXACTLY ONCE — commitments AS their checkbox, enumerations AS
+         * their items, the rest as prose — stated in Rules, Body, FINAL CHECKLIST
+         * and Example A's caption. Also: action-only notes ("comprare le pile…")
+         * are a checkbox even without a "devo" marker, and a list's introductory
+         * phrase belongs in the title, never as a prose copy of the items.
+         * Same-round code companions: bare-number junk-mention filter ("2"),
+         * scanner-on-surface resolution for unresolved compound mentions ("domani
+         * alle 15" with iso null), unpaired-bold repair in MarkdownBodyFormatter.
+         * Eval report: docs/prompt-evaluations/v13-eval-round3-and-v14.md.
          */
-        const val ACTIVE_PROMPT = "structure_note_v10.txt"
+        const val ACTIVE_PROMPT = "structure_note_v14.txt"
     }
 }

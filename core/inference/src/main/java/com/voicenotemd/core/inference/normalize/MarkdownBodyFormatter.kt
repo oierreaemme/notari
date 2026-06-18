@@ -53,15 +53,28 @@ object MarkdownBodyFormatter {
         //    insert a blank line between them.
         s = ensureBlankLineBeforeBlocks(s)
 
-        // 3. Collapse 3+ consecutive newlines to exactly 2.
+        // 3. Repair unpaired bold markers (real-device 2026-06-10: "…budget
+        //    review** on **Monday morning**" — an odd number of `**` on one line
+        //    leaks literal asterisks in every renderer). Guessing WHICH marker is
+        //    the stray is unreliable, so the rule is blunt and predictable: a line
+        //    that cannot balance its bold loses bold entirely. Words always survive.
+        s = repairUnpairedBold(s)
+
+        // 4. Collapse 3+ consecutive newlines to exactly 2.
         s = TRIPLE_NEWLINE.replace(s, "\n\n")
 
-        // 4. Strip trailing whitespace on each line.
+        // 5. Strip trailing whitespace on each line.
         s = TRAILING_WS.replace(s, "")
 
-        // 5. Final trim — but preserve a trailing newline if the original had one.
+        // 6. Final trim — but preserve a trailing newline if the original had one.
         return s.trim()
     }
+
+    /** A line with an ODD `**` count is unbalanceable → strip bold from that line. */
+    private fun repairUnpairedBold(text: String): String =
+        text.split("\n").joinToString("\n") { line ->
+            if (BOLD_MARKER.findAll(line).count() % 2 == 0) line else line.replace("**", "")
+        }
 
     private fun ensureBlankLineBeforeBlocks(text: String): String {
         val lines = text.split("\n")
@@ -116,6 +129,9 @@ object MarkdownBodyFormatter {
     // `\w` includes digits. Real voice notes contain math far more often than
     // they contain a bullet that starts with a digit, so the trade-off is clear.
     private val INLINE_BULLET = Regex("(?<=\\S)\\s+- (?=\\p{L})")
+
+    // Bold delimiter for the unpaired-marker repair.
+    private val BOLD_MARKER = Regex("\\*\\*")
 
     // 3+ consecutive newlines, possibly with whitespace between.
     private val TRIPLE_NEWLINE = Regex("\\n{3,}")

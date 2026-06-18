@@ -42,12 +42,17 @@ fun MentionsSection(
     modifier: Modifier = Modifier,
     zone: ZoneId = ZoneId.systemDefault(),
     locale: Locale = Locale.getDefault(),
+    // Labels are passed in (rather than read from a resource here) so this design-system
+    // component owns no string resources of its own — callers supply localised copy from
+    // their own modules. Defaults keep the component usable standalone (previews/tests).
+    header: String = "Datetime mentions",
+    unresolvedLabel: String = "Left unresolved — reference too vague",
 ) {
     if (mentions.isEmpty()) return
 
     Column(modifier = modifier) {
         Text(
-            text = "Datetime mentions",
+            text = header,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -55,7 +60,7 @@ fun MentionsSection(
         )
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             mentions.forEach { mention ->
-                MentionRow(mention, zone, locale)
+                MentionRow(mention, zone, locale, unresolvedLabel)
             }
         }
     }
@@ -66,6 +71,7 @@ private fun MentionRow(
     mention: DateMention,
     zone: ZoneId,
     locale: Locale,
+    unresolvedLabel: String,
 ) {
     Surface(
         shape = RoundedCornerShape(10.dp),
@@ -97,7 +103,7 @@ private fun MentionRow(
                 Text(
                     text =
                         mention.resolved?.let { formatInstant(it, zone, locale) }
-                            ?: "Left unresolved — reference too vague",
+                            ?: unresolvedLabel,
                     style = MaterialTheme.typography.labelSmall,
                     color =
                         if (mention.resolved == null) {

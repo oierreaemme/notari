@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voicenotemd.core.common.markdown.toMarkdownWithFrontmatter
 import com.voicenotemd.core.common.repository.NoteRepository
+import com.voicenotemd.core.common.usecase.StructureNoteUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Clock
@@ -29,6 +31,7 @@ class NoteDetailViewModel
     @Inject
     constructor(
         private val noteRepository: NoteRepository,
+        private val structureNote: StructureNoteUseCase,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         /** Pluggable for tests; production uses [Clock.systemUTC]. */
@@ -89,6 +92,66 @@ class NoteDetailViewModel
                         _uiEvents.emit(NoteDetailUiEvent.NavigateToAppend(noteId))
                     }
                 }
+                NoteDetailUiIntent.Restructure -> handleRestructure()
+                NoteDetailUiIntent.DismissRestructureError ->
+                    _uiState.update { it.copy(restructureError = null) }
+            }
+        }
+
+        /**
+         * Re-run on-device structuring on the note's current text and overwrite the note's
+         * title/body/tags/mentions with the result, preserving its id and creation time.
+         *
+         * Only commits when structuring actually succeeds (`structured == true`); on the
+         * plain-text fallback we keep the original note untouched and surface a retry hint,
+         * because overwriting a readable note with the same unstructured text would lose
+         * nothing but also help nothing. The original text is never lost either way.
+         */
+        private fun handleRestructure() {
+            val note = _uiState.value.note ?: return
+            if (_uiState.value.isRestructuring) return
+            val source = note.bodyMarkdown
+            if (source.isBlank()) return
+
+            _uiState.update { it.copy(isRestructuring = true, restructureError = null) }
+            viewModelScope.launch {
+                // Nudge Gemma toward reusing tags already in the user's corpus (ADR 0012),
+                // excluding this note's own tags so a redo doesn't just echo them back.
+                val ownTags = note.tags.map { it.value }.toSet()
+                val corpus =
+                    runCatching { noteRepository.observeAllTags().first() }
+                        .getOrDefault(emptyList())
+                        .map { it.value }
+                        .filterNot { it in ownTags }
+
+                val result =
+                    runCatching { structureNote(source, note.language, corpus) }
+                        .getOrNull()
+
+                if (result == null || !result.note.structured) {
+                    _uiState.update {
+                        it.copy(
+                            isRestructuring = false,
+                            restructureError =
+                                "Couldn't structure this note right now — it's often a cold " +
+                                    "start. Keep the screen on and try again in a moment.",
+                        )
+                    }
+                    return@launch
+                }
+
+                val structured = result.note
+                val updated =
+                    note.copy(
+                        title = structured.title.ifBlank { note.title },
+                        bodyMarkdown = structured.bodyMarkdown,
+                        tags = structured.tags,
+                        mentions = structured.mentions,
+                        structured = true,
+                        updatedAt = Instant.now(clock),
+                    )
+                noteRepository.update(updated)
+                _uiState.update { it.copy(isRestructuring = false, note = updated, restructureError = null) }
             }
         }
 

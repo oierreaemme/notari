@@ -8,7 +8,7 @@ template](https://github.com/joelparkerhenderson/architecture-decision-record/bl
 |------|----------|-------|
 | 0001 | Accepted | [Module structure and Clean Architecture layering](0001-module-structure.md) |
 | 0002 | Accepted | [Privacy enforcement (the cardinal rule)](0002-privacy-enforcement.md) |
-| 0003 | Accepted | [ASR strategy: SpeechRecognizer for v1, Gemma audio for v2](0003-asr-strategy.md) |
+| 0003 | Accepted | [ASR strategy: SpeechRecognizer for v1, Gemma audio for v2](0003-asr-strategy.md) (v2 direction superseded by 0018) |
 | 0004 | Superseded | [Gemma 4 E2B packaging and runtime delivery](0004-gemma-model-packaging.md) (runtime + delivery sections superseded by 0008) |
 | 0005 | Accepted | [JSON output contract for the structuring step](0005-json-output-contract.md) |
 | 0006 | Accepted | [MVI state shape for feature ViewModels](0006-mvi-state-shape.md) |
@@ -23,6 +23,20 @@ template](https://github.com/joelparkerhenderson/architecture-decision-record/bl
 | 0015 | Accepted | [LLM emits intent, deterministic code imposes form](0015-llm-intent-code-form.md) |
 | 0016 | Accepted | [Separate engine load from inference timeout](0016-engine-load-inference-split.md) |
 | 0017 | Accepted | [Language bleeding and inference contention](0017-language-bleeding-and-inference-contention.md) |
+| 0018 | Accepted | [Continuous-streaming ASR: replace SpeechRecognizer with Vosk → whisper.cpp batch](0018-continuous-streaming-asr-vosk.md) |
+| 0019 | Accepted | [Encryption at rest, decoupled from the biometric lock](0019-encryption-at-rest-decoupled-from-biometric.md) |
+| 0020 | Accepted | [AudioRecord warm-up grace period — the "Preparazione…" phase](0020-capture-warmup-preparing-phase.md) |
+| 0021 | Accepted | [Strip informational logs from the release build via R8](0021-strip-info-logs-in-release.md) |
+| 0022 | Accepted | [Model delivery: keep SAF now, Play Asset Delivery when distribution scales](0022-model-delivery-saf-now-pad-later.md) |
+| 0023 | Proposed | [Structure notes asynchronously, off the capture critical path](0023-async-background-structuring.md) |
+| 0024 | Proposed | [Make resolved datetime mentions actionable (reminders / calendar)](0024-actionable-datetime-mentions.md) |
+| 0025 | Parked | [Speaker diarization: considered, parked](0025-speaker-diarization-parked.md) |
+| 0026 | Parked | [Notari desktop companion for heavy processing: idea, parked](0026-notari-desktop-companion-parked.md) |
+| 0027 | Accepted | [Audio buffer ownership: atomic snapshot-swap and transcription-free discard](0027-audio-buffer-ownership-and-discard.md) |
+| 0028 | Accepted | [Process-lifecycle engine release, VM-owned keep-alive, recording duration cap](0028-process-lifecycle-engine-release-and-capture-hardening.md) |
+| 0029 | Accepted | [Capture-first UX surfaces: CPU advisory, editable review, quick entries, vault export](0029-capture-first-ux-surfaces.md) |
+| 0030 | Accepted | [GPU backend unlocked: the missing uses-native-library declaration](0030-gpu-unlock-uses-native-library.md) |
+| 0031 | Proposed | [LiteRT-LM native structured output for the structuring step](0031-litertlm-native-function-calling.md) |
 
 ## Adding a new ADR
 

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notes_delete_cannot_undo">Questa azione non può essere annullata.</string>
+    <string name="notes_btn_delete">Elimina</string>
+    <string name="notes_btn_cancel">Annulla</string>
+    <string name="notes_search_placeholder">Cerca note</string>
+    <string name="notes_filter_all">Tutto</string>
+    <string name="notes_title">Note</string>
+    <string name="notes_cd_clear_selection">Deseleziona tutto</string>
+    <string name="notes_cd_back">Indietro</string>
+    <string name="notes_cd_select_all">Seleziona tutto</string>
+    <string name="notes_cd_export_selected">Esporta note selezionate</string>
+    <string name="notes_cd_delete_selected">Elimina note selezionate</string>
+    <string name="notes_untitled">Senza titolo</string>
+    <string name="notes_yesterday">Ieri</string>
+    <string name="notes_delete_one_confirm_title">Eliminare questa nota?</string>
+    <plurals name="notes_delete_many_confirm_title">
+        <item quantity="other">Eliminare %d note?</item>
+    </plurals>
+    <string name="notes_selected">%d selezionate</string>
+    <string name="notes_deleted_one">1 nota eliminata.</string>
+    <plurals name="notes_deleted_many">
+        <item quantity="other">%d note eliminate.</item>
+    </plurals>
+    <string name="notes_empty_default">Tocca il microfono per catturare il tuo primo pensiero.</string>
+    <string name="notes_empty_no_match">Nessuna nota corrisponde a \"%s\".</string>
+    <string name="notes_empty_no_tag">Nessuna nota con #%s ancora.</string>
+    <string name="notes_cd_export_all_folder">Esporta tutte le note in una cartella</string>
+</resources>

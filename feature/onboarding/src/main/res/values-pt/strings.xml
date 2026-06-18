@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_btn_skip">Pular</string>
+    <string name="onboarding_btn_next">Próximo</string>
+    <string name="onboarding_btn_get_started">Começar</string>
+    <string name="onboarding_page1_headline">Fale.</string>
+    <string name="onboarding_page1_body">Toque no microfone e dite naturalmente. Nós cuidamos do resto.</string>
+    <string name="onboarding_page2_headline">Transformamos em Markdown.</string>
+    <string name="onboarding_page2_body">Gemma 4 transforma sua voz em uma nota limpa e estruturada — título, tags, datas, corpo. Tudo no seu telefone.</string>
+    <string name="onboarding_page3_headline">O áudio nunca sai do seu telefone.</string>
+    <string name="onboarding_page3_body">Sem permissão INTERNET. Sem nuvem. O buffer de gravação é mantido na RAM e apagado no momento em que é transcrito.</string>
+</resources>

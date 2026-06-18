@@ -6,6 +6,7 @@ import com.voicenotemd.core.common.domain.Note
 import com.voicenotemd.core.common.domain.Tag
 import com.voicenotemd.core.common.domain.UserSettings
 import com.voicenotemd.core.common.repository.ImportResult
+import com.voicenotemd.core.common.repository.ModelImportCandidate
 import com.voicenotemd.core.common.repository.NoteRepository
 import com.voicenotemd.core.common.repository.OnDeviceModelRepository
 import com.voicenotemd.core.common.repository.OnDeviceModelStatus
@@ -31,17 +32,41 @@ import java.io.InputStream
 class SettingsViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private val settingsFlow = MutableStateFlow(UserSettings.Default)
-    private val modelStatusFlow = MutableStateFlow(OnDeviceModelStatus.Missing)
     private var deleteAllCalls = 0
     private val languageWrites = mutableListOf<Language?>()
-    private var importedBytes: ByteArray? = null
-    private var importResultStub: ImportResult = ImportResult.Success(sizeBytes = 0L)
-    private var modelDeleted = 0
     private val biometricWrites = mutableListOf<Boolean>()
 
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var noteRepository: NoteRepository
-    private lateinit var modelRepository: OnDeviceModelRepository
+
+    /** A simple fake model repository, instantiated once per managed model. */
+    private class FakeModelRepository : OnDeviceModelRepository {
+        val statusFlow = MutableStateFlow(OnDeviceModelStatus.Missing)
+        var importedBytes: ByteArray? = null
+        var importResultStub: ImportResult = ImportResult.Success(sizeBytes = 0L)
+        var deleted = 0
+
+        override fun observeStatus(): Flow<OnDeviceModelStatus> = statusFlow
+
+        override suspend fun importFrom(
+            source: InputStream,
+            candidate: ModelImportCandidate,
+        ): ImportResult {
+            importedBytes = source.readBytes()
+            if (importResultStub is ImportResult.Success) {
+                statusFlow.value = OnDeviceModelStatus.Present
+            }
+            return importResultStub
+        }
+
+        override suspend fun delete() {
+            deleted++
+            statusFlow.value = OnDeviceModelStatus.Missing
+        }
+    }
+
+    private val gemmaRepository = FakeModelRepository()
+    private val whisperRepository = FakeModelRepository()
 
     @Before
     fun setUp() {
@@ -82,23 +107,6 @@ class SettingsViewModelTest {
 
                 override suspend fun deleteAll() {
                     deleteAllCalls++
-                }
-            }
-        modelRepository =
-            object : OnDeviceModelRepository {
-                override fun observeStatus(): Flow<OnDeviceModelStatus> = modelStatusFlow
-
-                override suspend fun importFrom(source: InputStream): ImportResult {
-                    importedBytes = source.readBytes()
-                    if (importResultStub is ImportResult.Success) {
-                        modelStatusFlow.value = OnDeviceModelStatus.Present
-                    }
-                    return importResultStub
-                }
-
-                override suspend fun delete() {
-                    modelDeleted++
-                    modelStatusFlow.value = OnDeviceModelStatus.Missing
                 }
             }
     }
@@ -187,11 +195,11 @@ class SettingsViewModelTest {
     @Test
     fun `should expose model status from repository`() =
         runTest {
-            modelStatusFlow.value = OnDeviceModelStatus.Present
+            gemmaRepository.statusFlow.value = OnDeviceModelStatus.Present
             val vm = newViewModel()
             advanceTimeBy(50)
 
-            assertThat(vm.uiState.value.modelStatus).isEqualTo(OnDeviceModelStatus.Present)
+            assertThat(vm.uiState.value.gemma.status).isEqualTo(OnDeviceModelStatus.Present)
         }
 
     @Test
@@ -201,12 +209,28 @@ class SettingsViewModelTest {
             advanceTimeBy(50)
             val payload = byteArrayOf(1, 2, 3, 4, 5)
 
-            vm.importModelFromStream { ByteArrayInputStream(payload) }
+            vm.importModelFromStream(ManagedModel.Gemma) { ByteArrayInputStream(payload) }
             advanceTimeBy(50)
 
-            assertThat(importedBytes).isEqualTo(payload)
-            assertThat(vm.uiState.value.isImportingModel).isFalse()
-            assertThat(vm.uiState.value.modelStatus).isEqualTo(OnDeviceModelStatus.Present)
+            assertThat(gemmaRepository.importedBytes).isEqualTo(payload)
+            assertThat(vm.uiState.value.gemma.isImporting).isFalse()
+            assertThat(vm.uiState.value.gemma.status).isEqualTo(OnDeviceModelStatus.Present)
+        }
+
+    @Test
+    fun `should route whisper imports to the whisper repository only`() =
+        runTest {
+            val vm = newViewModel()
+            advanceTimeBy(50)
+            val payload = byteArrayOf(9, 8, 7)
+
+            vm.importModelFromStream(ManagedModel.Whisper) { ByteArrayInputStream(payload) }
+            advanceTimeBy(50)
+
+            assertThat(whisperRepository.importedBytes).isEqualTo(payload)
+            assertThat(gemmaRepository.importedBytes).isNull()
+            assertThat(vm.uiState.value.whisper.status).isEqualTo(OnDeviceModelStatus.Present)
+            assertThat(vm.uiState.value.gemma.status).isEqualTo(OnDeviceModelStatus.Missing)
         }
 
     @Test
@@ -215,25 +239,25 @@ class SettingsViewModelTest {
             val vm = newViewModel()
             advanceTimeBy(50)
 
-            vm.importModelFromStream { null }
+            vm.importModelFromStream(ManagedModel.Gemma) { null }
             advanceTimeBy(50)
 
-            assertThat(vm.uiState.value.lastImportError).isNotNull()
-            assertThat(vm.uiState.value.isImportingModel).isFalse()
-            assertThat(importedBytes).isNull()
+            assertThat(vm.uiState.value.gemma.lastImportError).isNotNull()
+            assertThat(vm.uiState.value.gemma.isImporting).isFalse()
+            assertThat(gemmaRepository.importedBytes).isNull()
         }
 
     @Test
     fun `should record reason when repository import fails`() =
         runTest {
-            importResultStub = ImportResult.Failed(reason = "disk full")
+            gemmaRepository.importResultStub = ImportResult.Failed(reason = "disk full")
             val vm = newViewModel()
             advanceTimeBy(50)
 
-            vm.importModelFromStream { ByteArrayInputStream(ByteArray(8)) }
+            vm.importModelFromStream(ManagedModel.Gemma) { ByteArrayInputStream(ByteArray(8)) }
             advanceTimeBy(50)
 
-            assertThat(vm.uiState.value.lastImportError).isEqualTo("disk full")
+            assertThat(vm.uiState.value.gemma.lastImportError).isEqualTo("disk full")
         }
 
     @Test
@@ -245,18 +269,18 @@ class SettingsViewModelTest {
             // With UnconfinedTestDispatcher the first import would complete synchronously
             // before the second call has a chance to be dropped. We pause the first import
             // inside its openStream lambda (which is `suspend () -> InputStream?`) so the
-            // ViewModel's `isImportingModel = true` state is observable to the second call.
+            // ViewModel's per-model `isImporting = true` state is observable to the second call.
             val gate = CompletableDeferred<Unit>()
             var firstStreamCalls = 0
-            vm.importModelFromStream {
+            vm.importModelFromStream(ManagedModel.Gemma) {
                 firstStreamCalls++
                 gate.await()
                 ByteArrayInputStream(ByteArray(8))
             }
             // At this point the first import coroutine is suspended at `gate.await()` and
-            // isImportingModel is still true. The second call must be dropped.
+            // gemma.isImporting is still true. The second call must be dropped.
             var secondStreamCalls = 0
-            vm.importModelFromStream {
+            vm.importModelFromStream(ManagedModel.Gemma) {
                 secondStreamCalls++
                 ByteArrayInputStream(ByteArray(8))
             }
@@ -327,21 +351,22 @@ class SettingsViewModelTest {
     @Test
     fun `should delete model and revert status on DeleteModel intent`() =
         runTest {
-            modelStatusFlow.value = OnDeviceModelStatus.Present
+            gemmaRepository.statusFlow.value = OnDeviceModelStatus.Present
             val vm = newViewModel()
             advanceTimeBy(50)
 
-            vm.onIntent(SettingsUiIntent.DeleteModel)
+            vm.onIntent(SettingsUiIntent.DeleteModel(ManagedModel.Gemma))
             advanceTimeBy(50)
 
-            assertThat(modelDeleted).isEqualTo(1)
-            assertThat(vm.uiState.value.modelStatus).isEqualTo(OnDeviceModelStatus.Missing)
+            assertThat(gemmaRepository.deleted).isEqualTo(1)
+            assertThat(vm.uiState.value.gemma.status).isEqualTo(OnDeviceModelStatus.Missing)
         }
 
     private fun newViewModel(): SettingsViewModel =
         SettingsViewModel(
             settingsRepository = settingsRepository,
             noteRepository = noteRepository,
-            modelRepository = modelRepository,
+            gemmaRepository = gemmaRepository,
+            whisperRepository = whisperRepository,
         )
 }

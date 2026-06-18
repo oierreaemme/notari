@@ -14,6 +14,8 @@ import com.voicenotemd.core.common.domain.Language
 import com.voicenotemd.core.common.domain.Note
 import com.voicenotemd.core.common.domain.Tag
 import com.voicenotemd.core.common.repository.NoteRepository
+import com.voicenotemd.core.common.usecase.StructureNoteUseCase
+import com.voicenotemd.core.common.usecase.StructuringResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -39,6 +41,22 @@ class NoteDetailViewModelTest {
     private val updates = mutableListOf<Note>()
 
     private lateinit var repository: NoteRepository
+
+    // Configurable structuring stub: tests set [structureStub] to control the outcome.
+    // null means "model unavailable" → the use case throws, exercising the failure path.
+    private var structureStub: StructuringResult? = null
+    private val capturedStructureTags = mutableListOf<List<String>>()
+    private val structureNote =
+        object : StructureNoteUseCase {
+            override suspend fun invoke(
+                transcript: String,
+                forceLanguage: Language?,
+                existingTags: List<String>,
+            ): StructuringResult {
+                capturedStructureTags += existingTags
+                return structureStub ?: error("structuring unavailable")
+            }
+        }
 
     @Before
     fun setUp() {
@@ -176,11 +194,82 @@ class NoteDetailViewModelTest {
             }
         }
 
+    @Test
+    fun `Restructure overwrites the note when structuring succeeds`() =
+        runTest {
+            seed(id = "abc", title = "raw first line", body = "raw transcript text", structured = false)
+            structureStub =
+                StructuringResult(
+                    note =
+                        Note(
+                            id = "ignored-new-id",
+                            title = "Structured Title",
+                            bodyMarkdown = "## Structured\n- bullet",
+                            tags = listOf(Tag.normalize("work")!!),
+                            mentions = emptyList(),
+                            language = Language.English,
+                            createdAt = Instant.parse("2026-01-01T00:00:00Z"),
+                            updatedAt = Instant.parse("2026-01-01T00:00:00Z"),
+                            structured = true,
+                        ),
+                    lastRawResponse = null,
+                )
+            val vm = newViewModel("abc")
+            advanceTimeBy(50)
+
+            vm.onIntent(NoteDetailUiIntent.Restructure)
+            advanceTimeBy(50)
+
+            val saved = updates.last()
+            assertThat(saved.id).isEqualTo("abc") // id + createdAt preserved
+            assertThat(saved.createdAt).isEqualTo(Instant.parse("2026-05-09T12:00:00Z"))
+            assertThat(saved.title).isEqualTo("Structured Title")
+            assertThat(saved.bodyMarkdown).isEqualTo("## Structured\n- bullet")
+            assertThat(saved.structured).isTrue()
+            assertThat(vm.uiState.value.isRestructuring).isFalse()
+            assertThat(vm.uiState.value.restructureError).isNull()
+        }
+
+    @Test
+    fun `Restructure keeps the note and surfaces an error on fallback`() =
+        runTest {
+            seed(id = "abc", title = "raw", body = "raw transcript text", structured = false)
+            structureStub =
+                StructuringResult(
+                    note =
+                        Note(
+                            id = "x",
+                            title = "raw",
+                            bodyMarkdown = "raw transcript text",
+                            tags = emptyList(),
+                            mentions = emptyList(),
+                            language = Language.English,
+                            createdAt = Instant.parse("2026-01-01T00:00:00Z"),
+                            updatedAt = Instant.parse("2026-01-01T00:00:00Z"),
+                            // fallback: model couldn't structure
+                            structured = false,
+                        ),
+                    lastRawResponse = "{ broken json",
+                )
+            val vm = newViewModel("abc")
+            advanceTimeBy(50)
+
+            vm.onIntent(NoteDetailUiIntent.Restructure)
+            advanceTimeBy(50)
+
+            // No update committed; original note intact; a retry hint is shown.
+            assertThat(updates).isEmpty()
+            assertThat(vm.uiState.value.note?.structured).isFalse()
+            assertThat(vm.uiState.value.restructureError).isNotNull()
+            assertThat(vm.uiState.value.isRestructuring).isFalse()
+        }
+
     private fun seed(
         id: String,
         title: String = "Some title",
         body: String = "Some body",
         tags: List<Tag> = emptyList(),
+        structured: Boolean = true,
     ) {
         notesFlow.value = notesFlow.value + (
             id to
@@ -193,7 +282,7 @@ class NoteDetailViewModelTest {
                     language = Language.English,
                     createdAt = Instant.parse("2026-05-09T12:00:00Z"),
                     updatedAt = Instant.parse("2026-05-09T12:00:00Z"),
-                    structured = true,
+                    structured = structured,
                 )
         )
     }
@@ -201,6 +290,7 @@ class NoteDetailViewModelTest {
     private fun newViewModel(id: String): NoteDetailViewModel =
         NoteDetailViewModel(
             noteRepository = repository,
+            structureNote = structureNote,
             savedStateHandle = SavedStateHandle(mapOf(NoteDetailViewModel.NOTE_ID_KEY to id)),
         ).apply {
             clock = Clock.fixed(Instant.parse("2026-05-09T12:00:00Z"), ZoneOffset.UTC)

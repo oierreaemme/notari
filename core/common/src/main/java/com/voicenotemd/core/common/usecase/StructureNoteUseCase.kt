@@ -62,4 +62,12 @@ data class StructuringResult(
      * after a successful retry — useful for prompt-quality investigations.
      */
     val lastRawResponse: String?,
+    /**
+     * True when the inference ran on the CPU fallback path (GPU init failed or is
+     * unavailable on this device). The UI uses it for a one-time "this phone runs
+     * Gemma on CPU" advisory so users understand why structuring is slower on their
+     * hardware (ADR 0016 §UX follow-up). Default false so test doubles and the
+     * plain-fallback path don't have to care.
+     */
+    val cpuFallback: Boolean = false,
 )

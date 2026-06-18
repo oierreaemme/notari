@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notedetail_delete_confirm_title">Delete this note?</string>
+    <string name="notedetail_delete_cannot_undo">This cannot be undone.</string>
+    <string name="notedetail_btn_delete">Delete</string>
+    <string name="notedetail_btn_cancel">Cancel</string>
+    <string name="notedetail_label_title">Title</string>
+    <string name="notedetail_label_body">Body</string>
+    <string name="notedetail_btn_save">Save</string>
+    <string name="notedetail_phase_structuring">Structuring…</string>
+    <string name="notedetail_btn_structure_with_ai">Structure with AI</string>
+    <string name="notedetail_note_not_found">This note no longer exists.</string>
+    <string name="notedetail_cd_back">Back</string>
+    <string name="notedetail_cd_structure_with_ai">Structure with AI</string>
+    <string name="notedetail_cd_share">Share as Markdown</string>
+    <string name="notedetail_cd_append_voice">Append voice note</string>
+    <string name="notedetail_cd_edit">Edit</string>
+    <string name="notedetail_cd_delete">Delete</string>
+    <string name="notedetail_title_edit_note">Edit note</string>
+    <string name="notedetail_title_note">Note</string>
+    <string name="notedetail_plain_text_banner">This note was saved as plain text — structuring didn\'t run.</string>
+    <string name="notedetail_untitled">Untitled</string>
+    <string name="mentions_section_header">Datetime mentions</string>
+    <string name="mentions_unresolved">Left unresolved — reference too vague</string>
+    <string name="notedetail_created_prefix">Created %1$s</string>
+</resources>

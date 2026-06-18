@@ -55,6 +55,19 @@ interface GemmaSession {
      * use case picks the right formula once it knows which path is live.
      */
     fun backend(): InferenceBackend = InferenceBackend.UNKNOWN
+
+    /**
+     * Release the loaded engine and its memory (~1.5 GB for Gemma 4 E2B). Idempotent;
+     * safe to call when nothing is loaded. The next [generate]/[warmUp] reloads lazily.
+     *
+     * Exposed on the interface so process-lifecycle code (ADR 0028: the idle-release
+     * observer in the Application) can unload deterministically without knowing the
+     * concrete implementation. `onTrimMemory(TRIM_MEMORY_COMPLETE)` is documented as
+     * never called on API 34+, so this is the primary memory-release path there.
+     *
+     * Default: no-op, for stub sessions that hold no engine.
+     */
+    fun release() {}
 }
 
 /**

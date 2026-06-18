@@ -3,6 +3,7 @@ package com.voicenotemd.feature.capture
 import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
+import android.os.Build
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -13,6 +14,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,11 +23,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Notes
@@ -38,6 +45,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -61,7 +69,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -71,6 +81,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voicenotemd.core.common.domain.Language
 import com.voicenotemd.core.common.domain.Note
+import com.voicenotemd.core.design.components.MarkdownText
 import com.voicenotemd.core.design.components.MentionsSection
 import kotlinx.coroutines.delay
 
@@ -91,6 +102,9 @@ fun CaptureRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val fallbackMessage = stringResource(R.string.capture_fallback_snackbar)
+    val backgroundStructuringMessage = stringResource(R.string.capture_saved_structuring_background)
+    val cpuAdvisoryMessage = stringResource(R.string.capture_cpu_advisory)
 
     val permissionLauncher =
         rememberLauncherForActivityResult(
@@ -98,6 +112,13 @@ fun CaptureRoute(
         ) { granted ->
             viewModel.onIntent(CaptureUiIntent.PermissionResult(granted = granted))
         }
+
+    // Best-effort: the foreground-service "recording" notification needs POST_NOTIFICATIONS
+    // on Android 13+. If denied, recording still works — only the visible indicator is missing.
+    val notificationPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { /* best-effort; the foreground service starts regardless */ }
 
     LaunchedEffect(viewModel) {
         viewModel.uiEvents.collect { event ->
@@ -116,9 +137,13 @@ fun CaptureRoute(
                     }
                 }
                 CaptureUiEvent.StructuringFellBack -> {
-                    snackbarHost.showSnackbar(
-                        "Could not auto-structure this note — saved as plain text.",
-                    )
+                    snackbarHost.showSnackbar(fallbackMessage)
+                }
+                CaptureUiEvent.StructuringContinuesInBackground -> {
+                    snackbarHost.showSnackbar(backgroundStructuringMessage)
+                }
+                CaptureUiEvent.CpuFallbackAdvisory -> {
+                    snackbarHost.showSnackbar(cpuAdvisoryMessage)
                 }
             }
         }
@@ -140,6 +165,24 @@ fun CaptureRoute(
     LifecycleResumeEffect(viewModel) {
         viewModel.warmUpIfNeeded()
         onPauseOrDispose { /* no cleanup needed — warm-up is fire-and-forget */ }
+    }
+
+    // The microphone foreground service itself is started/stopped by the ViewModel
+    // (RecordingKeepAlive — it follows the phase state machine, so it also stops when
+    // capture ends while this screen is NOT composed; review 2026-06-10 #10). The
+    // composition only handles the UI-side concern left: asking for POST_NOTIFICATIONS
+    // on Android 13+ so the "recording" notification is visible (recording works
+    // regardless if denied).
+    LaunchedEffect(state.phase) {
+        if (state.phase.isCaptureActive &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     CaptureScreen(
@@ -164,16 +207,19 @@ internal fun CaptureScreen(
         snackbarHost = { SnackbarHost(snackbarHost) },
         topBar = {
             TopAppBar(
-                title = { Text("Notari") },
+                title = { Text(stringResource(R.string.capture_app_name)) },
                 actions = {
                     IconButton(onClick = { onIntent(CaptureUiIntent.ToggleTextInput) }) {
-                        Icon(Icons.Outlined.Keyboard, contentDescription = "Type note")
+                        Icon(
+                            Icons.Outlined.Keyboard,
+                            contentDescription = stringResource(R.string.capture_cd_type_note),
+                        )
                     }
                     IconButton(onClick = onOpenNotes) {
-                        Icon(Icons.Outlined.Notes, contentDescription = "Notes")
+                        Icon(Icons.Outlined.Notes, contentDescription = stringResource(R.string.capture_cd_notes))
                     }
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                        Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.capture_cd_settings))
                     }
                 },
             )
@@ -186,13 +232,22 @@ internal fun CaptureScreen(
                     padding = padding,
                     onIntent = onIntent,
                 )
+            CaptureUiState.Phase.Transcribing ->
+                TranscribingPane(padding = padding)
             CaptureUiState.Phase.Structuring ->
                 StructuringPane(
                     padding = padding,
                     startedAtMs = state.structuringStartedAtMs,
                     estimatedSeconds = estimateStructuringSeconds(state.partialTranscript.length),
+                    onIntent = onIntent,
                 )
-            else -> RecordingPane(state = state, padding = padding, onIntent = onIntent)
+            else ->
+                RecordingPane(
+                    state = state,
+                    padding = padding,
+                    onIntent = onIntent,
+                    onOpenSettings = onOpenSettings,
+                )
         }
     }
 
@@ -227,7 +282,7 @@ private fun TextInputSheet(
     ) {
         Column(modifier = Modifier.padding(bottom = 24.dp).padding(horizontal = 16.dp)) {
             Text(
-                text = "Silent Mic",
+                text = stringResource(R.string.capture_sheet_title_silent_mic),
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
@@ -236,7 +291,7 @@ private fun TextInputSheet(
                 value = text,
                 onValueChange = { text = it },
                 modifier = Modifier.fillMaxWidth().height(200.dp),
-                placeholder = { Text("Jot down rough notes, let Gemma structure them...") },
+                placeholder = { Text(stringResource(R.string.capture_text_input_placeholder)) },
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
             )
             Button(
@@ -249,7 +304,7 @@ private fun TextInputSheet(
                 },
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
             ) {
-                Text("Process with AI")
+                Text(stringResource(R.string.capture_btn_process_with_ai))
             }
         }
     }
@@ -269,15 +324,15 @@ private fun LanguagePickerSheet(
     ) {
         Column(modifier = Modifier.padding(bottom = 24.dp)) {
             Text(
-                text = "Dictation language",
+                text = stringResource(R.string.capture_sheet_title_dictation_language),
                 modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
             ListItem(
-                headlineContent = { Text("Auto (phone language)") },
+                headlineContent = { Text(stringResource(R.string.capture_lang_auto_label)) },
                 supportingContent = {
-                    Text("Uses your phone's language — pin one below if you dictate in another")
+                    Text(stringResource(R.string.capture_lang_auto_description))
                 },
                 trailingContent =
                     if (current == null) {
@@ -301,10 +356,7 @@ private fun LanguagePickerSheet(
                 )
             }
             Text(
-                text =
-                    "If offline dictation in your language returns nothing, install " +
-                        "the matching language pack from Android Settings → System → " +
-                        "Languages → Speech → Offline.",
+                text = stringResource(R.string.capture_lang_offline_hint),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -334,13 +386,75 @@ private fun languageDisplayName(language: Language): String =
         Language.Unknown -> "Auto"
     }
 
+/**
+ * Idle-screen banner shown when a model hasn't been imported yet (ADR 0022). Whisper
+ * missing is the blocking case (no transcription at all); Gemma missing is advisory (notes
+ * still save, as plain text). Tapping "Set up" sends the user to Settings → On-device models.
+ */
+@Composable
+private fun SetupNeededBanner(
+    whisperMissing: Boolean,
+    gemmaMissing: Boolean,
+    onOpenSettings: () -> Unit,
+) {
+    val message =
+        when {
+            whisperMissing && gemmaMissing -> stringResource(R.string.capture_setup_both_models)
+            whisperMissing -> stringResource(R.string.capture_setup_asr_only)
+            else -> stringResource(R.string.capture_setup_gemma_only)
+        }
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.capture_btn_set_up)) }
+        }
+    }
+}
+
 @Composable
 private fun RecordingPane(
     state: CaptureUiState,
     padding: PaddingValues,
     onIntent: (CaptureUiIntent) -> Unit,
+    onOpenSettings: () -> Unit = {},
 ) {
     val isRecording = state.phase == CaptureUiState.Phase.Recording
+    // During Preparing we hold the same layout as Recording but render a subtler, more
+    // honest version: no reactive PulseRings (the mic isn't "alive" yet), a Linear
+    // indeterminate progress under the central text to communicate ongoing setup, and a
+    // distinct copy ("Preparazione…") so the user knows not to start speaking yet. The
+    // big button and the Discard text button still work — both route to cancelRecording
+    // in the VM (see CaptureViewModel.handleToggleRecord).
+    val isPreparing = state.phase == CaptureUiState.Phase.Preparing
+    val isCaptureActive = isRecording || isPreparing
+    val transcriptScroll = rememberScrollState()
+    // Keep the latest words in view as the transcript grows during long dictation.
+    LaunchedEffect(state.partialTranscript) {
+        if (transcriptScroll.maxValue > 0) {
+            transcriptScroll.animateScrollTo(transcriptScroll.maxValue)
+        }
+    }
+
+    val preparingText = stringResource(R.string.capture_phase_preparing)
+    val listeningText = stringResource(R.string.capture_listening)
+    val tapToAppendText = stringResource(R.string.capture_tap_to_append)
+    val tapToCaptureText = stringResource(R.string.capture_tap_to_capture)
+
     Column(
         modifier =
             Modifier
@@ -350,6 +464,16 @@ private fun RecordingPane(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
+        // Setup nudge: only on the idle screen, and only when a model is actually missing.
+        // Hidden during Preparing/Recording so it never competes with the live transcript.
+        if (state.phase == CaptureUiState.Phase.Idle && state.setupNeeded) {
+            SetupNeededBanner(
+                whisperMissing = state.whisperModelMissing,
+                gemmaMissing = state.gemmaModelMissing,
+                onOpenSettings = onOpenSettings,
+            )
+        }
+
         LanguageChip(
             // When no language is pinned, "Auto" means the recognizer uses the phone's
             // system locale (SpeechRecognizer does not detect the spoken language). Show
@@ -364,28 +488,52 @@ private fun RecordingPane(
         Column(
             modifier =
                 Modifier
+                    .weight(1f)
                     .fillMaxWidth()
+                    .verticalScroll(transcriptScroll)
                     .padding(top = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 text =
-                    if (isRecording) {
-                        state.partialTranscript.ifBlank { "Listening…" }
-                    } else if (state.isAppending) {
-                        "Tap the mic to append to note..."
-                    } else {
-                        "Tap the mic to capture your first thought."
+                    when {
+                        isPreparing -> preparingText
+                        isRecording -> state.partialTranscript.ifBlank { listeningText }
+                        state.isAppending -> tapToAppendText
+                        else -> tapToCaptureText
                     },
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center,
             )
-            // Long-note advisory: Gemma E2B starts to feel slow past ~2000 chars of
-            // transcript (≈ 3-4 min of dictation). Inference still completes within
+            // Discreet "we're warming up, please wait a moment" indicator. Indeterminate
+            // because the warm-up duration is variable (~700-1000 ms on a Pixel 6a, longer
+            // on some Bluetooth SCO paths). We deliberately do NOT estimate seconds — the
+            // window is short enough that a counter would just add visual noise.
+            if (isPreparing) {
+                LinearProgressIndicator(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(0.4f)
+                            .padding(top = 12.dp),
+                )
+                Text(
+                    text = stringResource(R.string.capture_mic_stabilizing),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            // Long-note advisory: Gemma E2B starts to feel slow past ~3 minutes of
+            // dictation (≈ 2000 chars of transcript). Inference still completes within
             // the warm budget, but structuring quality degrades on context this long
             // because of the model's effective 2B-parameter size. The banner sets
             // expectations honestly instead of pretending nothing changed.
-            if (isRecording && state.partialTranscript.length > LONG_NOTE_CHAR_THRESHOLD) {
+            //
+            // Duration-based since the whisper migration (ADR 0018): batch mode has no
+            // live transcript, so the old `partialTranscript.length` check could never
+            // fire (review 2026-06-10).
+            if (isRecording && state.recordingDurationMs > LONG_NOTE_DURATION_MS) {
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(10.dp),
@@ -395,9 +543,7 @@ private fun RecordingPane(
                             .padding(top = 12.dp),
                 ) {
                     Text(
-                        text =
-                            "Long note — structuring may take a bit longer and may " +
-                                "simplify long stretches.",
+                        text = stringResource(R.string.capture_long_note_warning),
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
@@ -408,7 +554,10 @@ private fun RecordingPane(
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(contentAlignment = Alignment.Center) {
-                // Anelli reattivi visibili solo durante la registrazione
+                // Anelli reattivi visibili solo durante la registrazione vera. Durante
+                // Preparing l'rmsLevel può oscillare per via dell'AGC che si stabilizza,
+                // ma mostrarli sarebbe disonesto — implicherebbe che il mic stia già
+                // catturando, mentre stiamo ancora aspettando il primo frame utile.
                 if (isRecording) {
                     PulseRings(rmsLevel = state.rmsLevel, isRecording = true)
                     PulseRings(rmsLevel = state.rmsLevel * 0.5f, isRecording = true)
@@ -420,8 +569,11 @@ private fun RecordingPane(
                     shape = CircleShape,
                     colors =
                         IconButtonDefaults.filledIconButtonColors(
+                            // Both Recording AND Preparing render the destructive (error)
+                            // color so the user can tell at a glance "tapping this will
+                            // stop / cancel". Only fully Idle shows the primary mic color.
                             containerColor =
-                                if (isRecording) {
+                                if (isCaptureActive) {
                                     MaterialTheme.colorScheme.error
                                 } else {
                                     MaterialTheme.colorScheme.primary
@@ -429,22 +581,29 @@ private fun RecordingPane(
                         ),
                 ) {
                     Icon(
-                        imageVector = if (isRecording) Icons.Outlined.Stop else Icons.Outlined.Mic,
-                        contentDescription = if (isRecording) "Stop recording" else "Start recording",
+                        imageVector = if (isCaptureActive) Icons.Outlined.Stop else Icons.Outlined.Mic,
+                        contentDescription =
+                            when {
+                                isPreparing -> stringResource(R.string.capture_cd_cancel_preparing)
+                                isRecording -> stringResource(R.string.capture_cd_stop_recording)
+                                else -> stringResource(R.string.capture_cd_start_recording)
+                            },
                         modifier = Modifier.size(48.dp),
                     )
                 }
             }
 
-            // Discard the in-progress take without structuring it. Shown only while
-            // recording; a low-emphasis text button so Stop stays the single prominent
-            // action (CLAUDE.md §8 recording UI).
-            if (isRecording) {
+            // Discard the in-progress take without structuring it. Shown during both
+            // Preparing and Recording so the user always has a low-emphasis "abandon"
+            // path (CLAUDE.md §8 recording UI). The big button does the same job, but
+            // having an explicit "Discard" text affordance avoids relying on the user
+            // recognising that the red button means cancel during Preparing.
+            if (isCaptureActive) {
                 TextButton(
                     onClick = { onIntent(CaptureUiIntent.CancelRecording) },
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
-                    Text("Discard")
+                    Text(stringResource(R.string.capture_btn_discard))
                 }
             }
         }
@@ -495,6 +654,7 @@ private fun StructuringPane(
     padding: PaddingValues,
     startedAtMs: Long?,
     @Suppress("UNUSED_PARAMETER") estimatedSeconds: Int,
+    onIntent: (CaptureUiIntent) -> Unit,
 ) {
     // Tick the elapsed counter every 500ms so the user has feedback that work is
     // actually progressing. Anchored to wall-clock `System.currentTimeMillis()`,
@@ -541,7 +701,7 @@ private fun StructuringPane(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator()
             Text(
-                text = "Structuring your note…",
+                text = stringResource(R.string.capture_structuring_your_note),
                 modifier = Modifier.padding(top = 16.dp),
                 style = MaterialTheme.typography.titleMedium,
             )
@@ -551,23 +711,65 @@ private fun StructuringPane(
             // and a wrong promise is worse than no promise. The user gets
             // accurate feedback ("38s elapsed") instead of false comfort.
             Text(
-                text = "${elapsedSeconds}s elapsed",
+                text = stringResource(R.string.capture_structuring_elapsed, elapsedSeconds),
                 modifier = Modifier.padding(top = 8.dp),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text =
-                    "Gemma 4 E2B is running locally on your device. Structuring " +
-                        "time depends on your hardware (typically 20–90 s, longer on " +
-                        "older phones without GPU acceleration). Your audio and " +
-                        "transcript never leave the phone.",
+                text = stringResource(R.string.capture_structuring_info),
                 modifier = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
+            // ADR 0023 escape hatch: the user never has to wait. The note is saved as
+            // plain text immediately and the running inference becomes a background
+            // upgrade. (If the quick wait expires first, the VM takes this path on its
+            // own — this button just hands the same choice to the user right away.)
+            TextButton(
+                onClick = { onIntent(CaptureUiIntent.SaveAsPlainText) },
+                modifier = Modifier.padding(top = 20.dp),
+            ) {
+                Text(stringResource(R.string.capture_btn_save_as_text))
+            }
+            Text(
+                text = stringResource(R.string.capture_save_as_text_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
         }
+    }
+}
+
+@Composable
+private fun TranscribingPane(padding: PaddingValues) {
+    // Shown while whisper.cpp is turning the captured PCM into text (ADR 0018 phase 2).
+    // Deliberately minimal — the meaningful state machine work happens behind the scenes;
+    // this surface is just an honest "we're transcribing, then we'll structure" signal so
+    // the user doesn't think the long Structuring step is what's slow.
+    Column(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(48.dp))
+        Text(
+            text = stringResource(R.string.capture_phase_transcribing),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 20.dp),
+        )
+        Text(
+            text = stringResource(R.string.capture_transcribing_subtitle),
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 8.dp),
+        )
     }
 }
 
@@ -581,6 +783,7 @@ private fun StructuringPane(
 private fun estimateStructuringSeconds(transcriptLength: Int): Int =
     (15 + transcriptLength * 0.04).toInt().coerceIn(5, 150)
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ReviewPane(
     state: CaptureUiState,
@@ -602,7 +805,7 @@ private fun ReviewPane(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    text = "Saved as plain text — auto-structuring is unavailable right now.",
+                    text = stringResource(R.string.capture_structuring_failed_banner),
                     modifier = Modifier.padding(12.dp),
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -619,7 +822,7 @@ private fun ReviewPane(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            text = "Last model response (debug)",
+                            text = stringResource(R.string.capture_debug_last_response),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -636,7 +839,7 @@ private fun ReviewPane(
             OutlinedTextField(
                 value = note.title,
                 onValueChange = { onIntent(CaptureUiIntent.EditTitle(it)) },
-                label = { Text("Title") },
+                label = { Text(stringResource(R.string.capture_label_title)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 modifier =
@@ -645,45 +848,119 @@ private fun ReviewPane(
                         .padding(top = 8.dp),
             )
         }
-        OutlinedTextField(
-            value = note.bodyMarkdown,
-            onValueChange = { onIntent(CaptureUiIntent.EditBody(it)) },
-            label = { Text("Body") },
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp)
-                    .height(280.dp),
-        )
+        // Body: raw Markdown editing with an on-demand rendered preview. Markwon is
+        // render-only (see core.design.MarkdownText), so the toggle switches surfaces
+        // instead of trying to make the editor rich.
+        var showBodyPreview by remember { androidx.compose.runtime.mutableStateOf(false) }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        ) {
+            Box(modifier = Modifier.weight(1f))
+            TextButton(onClick = { showBodyPreview = !showBodyPreview }) {
+                Text(
+                    stringResource(
+                        if (showBodyPreview) R.string.capture_btn_edit_body else R.string.capture_btn_preview_body,
+                    ),
+                )
+            }
+        }
+        if (showBodyPreview) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                MarkdownText(
+                    markdown = note.bodyMarkdown,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(280.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(12.dp),
+                )
+            }
+        } else {
+            OutlinedTextField(
+                value = note.bodyMarkdown,
+                onValueChange = { onIntent(CaptureUiIntent.EditBody(it)) },
+                label = { Text(stringResource(R.string.capture_label_body)) },
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(280.dp),
+            )
+        }
+
+        // Tags — editable in review (review 2026-06-10 UX): remove via the ✕ on each
+        // chip, add via the field below. Normalization/dedupe live in the ViewModel.
         if (note.tags.isNotEmpty()) {
-            Row(
+            FlowRow(
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 note.tags.forEach { tag ->
                     Surface(
                         color = MaterialTheme.colorScheme.secondaryContainer,
                         shape = RoundedCornerShape(50),
                     ) {
-                        Text(
-                            text = "#${tag.value}",
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "#${tag.value}",
+                                modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                            IconButton(
+                                onClick = { onIntent(CaptureUiIntent.RemoveTag(tag.value)) },
+                                modifier = Modifier.size(28.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Close,
+                                    contentDescription =
+                                        stringResource(R.string.capture_cd_remove_tag, tag.value),
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
+        var newTag by remember { androidx.compose.runtime.mutableStateOf("") }
+        OutlinedTextField(
+            value = newTag,
+            onValueChange = { newTag = it },
+            label = { Text(stringResource(R.string.capture_label_add_tag)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions =
+                KeyboardActions(
+                    onDone = {
+                        if (newTag.isNotBlank()) {
+                            onIntent(CaptureUiIntent.AddTag(newTag))
+                            newTag = ""
+                        }
+                    },
+                ),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+        )
         // On-device temporal reasoning made visible: each chip shows the surface form
         // Gemma saw and the ISO timestamp it anchored to (or "unresolved" when the
         // reference was intentionally too vague to anchor).
         MentionsSection(
             mentions = note.mentions,
             modifier = Modifier.padding(top = 16.dp),
+            header = stringResource(R.string.mentions_section_header),
+            unresolvedLabel = stringResource(R.string.mentions_unresolved),
         )
         Row(
             modifier =
@@ -693,7 +970,7 @@ private fun ReviewPane(
             horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
         ) {
             TextButton(onClick = { onIntent(CaptureUiIntent.DiscardPreview) }) {
-                Text("Discard")
+                Text(stringResource(R.string.capture_btn_discard))
             }
             Button(
                 onClick = { onIntent(CaptureUiIntent.Save) },
@@ -702,7 +979,7 @@ private fun ReviewPane(
                         containerColor = MaterialTheme.colorScheme.primary,
                     ),
             ) {
-                Text("Save note")
+                Text(stringResource(R.string.capture_btn_save_note))
             }
         }
     }
@@ -735,7 +1012,7 @@ private fun LanguageChip(
             )
             Icon(
                 imageVector = Icons.Outlined.ArrowDropDown,
-                contentDescription = "Change dictation language",
+                contentDescription = stringResource(R.string.capture_cd_change_language),
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -745,6 +1022,6 @@ private fun LanguageChip(
 // Cap the debug raw-response display so a runaway generation doesn't blow up the UI.
 private const val MAX_DEBUG_RAW_CHARS = 4_000
 
-// Roughly 3-4 minutes of normal-pace dictation. Past this point we surface a soft
-// advisory about structuring latency + quality; see RecordingPane.
-private const val LONG_NOTE_CHAR_THRESHOLD = 2_000
+// Roughly 3 minutes of dictation ≈ 2000 chars of transcript. Past this point we surface
+// a soft advisory about structuring latency + quality; see RecordingPane.
+private const val LONG_NOTE_DURATION_MS = 180_000L

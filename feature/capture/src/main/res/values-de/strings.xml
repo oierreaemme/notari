@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="capture_app_name">Notari</string>
+    <string name="capture_phase_preparing">Vorbereitung…</string>
+    <string name="capture_phase_transcribing">Transkription…</string>
+    <string name="capture_cd_cancel_preparing">Vorbereitung abbrechen</string>
+    <string name="capture_cd_type_note">Notiz tippen</string>
+    <string name="capture_cd_notes">Notizen</string>
+    <string name="capture_cd_settings">Einstellungen</string>
+    <string name="capture_cd_change_language">Diktiersprache ändern</string>
+    <string name="capture_cd_stop_recording">Aufnahme stoppen</string>
+    <string name="capture_cd_start_recording">Aufnahme starten</string>
+    <string name="capture_text_input_placeholder">Grobe Notizen tippen, Gemma strukturiert sie…</string>
+    <string name="capture_btn_process_with_ai">Mit KI verarbeiten</string>
+    <string name="capture_lang_auto_label">Auto (Telefonsprache)</string>
+    <string name="capture_lang_auto_description">Verwendet die Sprache des Telefons — wähle unten eine andere, wenn du in einer anderen Sprache diktierst</string>
+    <string name="capture_btn_set_up">Einrichten</string>
+    <string name="capture_btn_discard">Verwerfen</string>
+    <string name="capture_label_title">Titel</string>
+    <string name="capture_label_body">Inhalt</string>
+    <string name="capture_btn_save_note">Notiz speichern</string>
+    <string name="capture_notification_title">Notari nimmt auf</string>
+    <string name="capture_notification_text">Audio bleibt auf diesem Gerät.</string>
+    <string name="capture_notification_channel_name">Aufnahme</string>
+    <string name="capture_notification_channel_description">Wird angezeigt, während Notari eine Sprachnotiz aufnimmt.</string>
+    <string name="capture_sheet_title_silent_mic">Stilles Mikrofon</string>
+    <string name="capture_sheet_title_dictation_language">Diktiersprache</string>
+    <string name="capture_structuring_your_note">Notiz wird strukturiert…</string>
+    <string name="capture_mic_stabilizing">Mikrofon stabilisiert sich — gleich sprechen.</string>
+    <string name="capture_structuring_elapsed">%1$ds vergangen</string>
+    <string name="capture_transcribing_subtitle">Audio wird zu Text. Bleibt auf dem Gerät.</string>
+    <string name="capture_structuring_info">Gemma 4 E2B läuft lokal auf deinem Gerät. Die Strukturierungszeit hängt von der Hardware ab (typischerweise 20–90 s, länger auf älteren Geräten ohne GPU-Beschleunigung). Audio und Transkript verlassen das Telefon nie.</string>
+    <string name="capture_long_note_warning">Lange Notiz — die Strukturierung kann etwas länger dauern und lange Abschnitte vereinfachen.</string>
+    <string name="capture_structuring_failed_banner">Als Nur-Text gespeichert — automatische Strukturierung ist derzeit nicht verfügbar.</string>
+    <string name="capture_fallback_snackbar">Notiz konnte nicht automatisch strukturiert werden — als Nur-Text gespeichert.</string>
+    <string name="capture_listening">Höre zu…</string>
+    <string name="capture_tap_to_append">Tippe auf das Mikrofon, um zur Notiz hinzuzufügen…</string>
+    <string name="capture_tap_to_capture">Tippe auf das Mikrofon, um deinen ersten Gedanken festzuhalten.</string>
+    <string name="capture_setup_both_models">Importiere die Transkriptions- und Strukturierungsmodelle, um zu beginnen. Bis dahin erzeugt das Diktat keinen Text.</string>
+    <string name="capture_setup_asr_only">Importiere ein Transkriptionsmodell zum Diktieren. Ohne es können Aufnahmen nicht in Text umgewandelt werden.</string>
+    <string name="capture_setup_gemma_only">Importiere das Gemma-Modell für strukturierte Notizen. Bis dahin werden Notizen als Nur-Text gespeichert.</string>
+    <string name="mentions_section_header">Datums- und Zeitangaben</string>
+    <string name="mentions_unresolved">Nicht aufgelöst — Angabe zu vage</string>
+    <string name="capture_lang_offline_hint">Wenn die Offline-Diktierfunktion in deiner Sprache nichts liefert, installiere das passende Sprachpaket über Android-Einstellungen → System → Sprachen → Spracheingabe → Offline.</string>
+    <string name="capture_debug_last_response">Letzte Modellantwort (Debug)</string>
+</resources>
