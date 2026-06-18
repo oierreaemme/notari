@@ -39,12 +39,12 @@ track.
 
 ```
  ┌──────────┐   ┌────────────────────┐   ┌────────────────────────┐
- │  Mic     │──▶│ SpeechRecognizer   │──▶│ Gemma 4 E2B            │
- │ capture  │   │ (OS-managed buffer)│   │ via LiteRT-LM runtime  │
+ │  Mic     │──▶│ whisper.cpp batch  │──▶│ Gemma 4 E2B            │
+ │ capture  │   │ (PCM in RAM only)  │   │ via LiteRT-LM runtime  │
  └──────────┘   └─────────┬──────────┘   │ (GPU → CPU fallback,   │
                           │              │  MTP speculative dec.) │
-                  Flow<String>           └────────────┬───────────┘
-                  transcript                          │
+                  transcript             └────────────┬───────────┘
+                  (produced at stop)                  │
                                                       ▼
                                           ┌────────────────────┐
                                           │ JSON with title,   │
@@ -59,16 +59,24 @@ track.
                                           └────────────────────┘
 ```
 
+Transcription runs on a bundled [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
+ggml model: the dictation is captured as PCM in RAM and transcribed once at
+stop (batch), never streamed to disk. See
+[ADR 0018](docs/decisions/0018-continuous-streaming-asr-vosk.md).
+
 The structuring prompt embeds the current wall-clock time so relative
 references like *"domani alle 15"* or *"tomorrow at 3pm"* come back as
 real ISO-8601 timestamps anchored to the device's timezone — temporal
 reasoning done locally, no clock service called over the network. See
 [ADR 0010](docs/decisions/0010-prompt-temporal-context.md).
 
-Inference probes three paths in order, falling back gracefully:
-`Backend.GPU` (fastest, fails on some OEM driver combos) →
-`Backend.CPU` (universal) → with `ExperimentalFlags.enableSpeculativeDecoding`
-flipped on for MTP drafter heads when the model carries them. See
+Inference probes two backends in order, falling back gracefully:
+`Backend.GPU` (fastest; requires the OpenCL vendor library to be declared
+via `uses-native-library` — see
+[ADR 0030](docs/decisions/0030-gpu-unlock-uses-native-library.md) — and is
+unavailable on parts with no OpenCL at all) → `Backend.CPU` (universal),
+with `ExperimentalFlags.enableSpeculativeDecoding` flipped on for MTP drafter
+heads when the model carries them. See
 [ADR 0011](docs/decisions/0011-backend-probing-and-mtp.md).
 
 Full architecture: [docs/architecture.md](docs/architecture.md).
@@ -102,12 +110,15 @@ We trade latency for privacy, and we tell you about it honestly:
   disk before generation begins. Pre-warming kicks off in the background
   the moment you land on the capture screen, so by the time you finish
   dictating it's usually ready.
-- **Structuring latency on Pixel 6a (Tensor G1, CPU backend)** —
-  empirically: 15-20s for a 200-character note, 30-40s for a 500-char
-  note, 50-60s for a 1000-char note. On devices with a working
-  `Backend.GPU` path the same notes complete in 5-15s (Pixel 6a's
-  Mali-G78 currently fails to compile the kernels with LiteRT-LM 0.11,
-  see ADR 0011 — your mileage will vary).
+- **Structuring latency depends on the backend.** On the **GPU backend**
+  — unlocked once the OpenCL vendor driver is declared via
+  `uses-native-library` (the earlier "GPU init fails" symptom was a missing
+  manifest declaration, not a driver bug; see
+  [ADR 0030](docs/decisions/0030-gpu-unlock-uses-native-library.md)) — a note
+  structures in a few seconds. On the **CPU fallback** (devices with no
+  usable OpenCL) the same notes take longer: empirically ~15-20s for a
+  200-character note, 30-40s for 500 chars, 50-60s for 1000 chars on a
+  Pixel 6a.
 - The capture screen shows an elapsed-time counter and an estimate
   while Gemma works, so you always know whether the spinner means
   *working* or *stuck*.
@@ -142,6 +153,34 @@ adb shell run-as com.voicenotemd find /data/data/com.voicenotemd -type f
 adb shell pm grant com.voicenotemd android.permission.DUMP  # if needed
 # Then use a tool like NetGuard or PCAPdroid to confirm zero traffic.
 ```
+
+## Try it
+
+Notari is a developer-oriented build for now — there's no app-store listing,
+and two model files are side-loaded once. If you're comfortable with Android
+Studio and `adb`, you can be running it in a few minutes:
+
+1. **Clone and open** the repo in Android Studio (Ladybug 2024.2.1+), JDK 17,
+   Android SDK 35 — or build from the CLI (see [Building](#building) below).
+2. **Build and install** onto a connected device or emulator:
+   `./gradlew :app:installDebug` (or hit Run ▶ in the IDE).
+3. **Side-load the Gemma 4 E2B model** — in-app: Settings → On-device model →
+   **Import `.litertlm`**. Details:
+   [Getting the Gemma 4 E2B model](#getting-the-gemma-4-e2b-model).
+4. **Side-load the whisper model** — currently `adb push` only (no in-app
+   import yet). Details:
+   [Getting the whisper.cpp transcription model](#getting-the-whispercpp-transcription-model).
+5. **Speak.** Tap the mic, dictate, tap stop — you get a structured Markdown
+   note, fully offline. Toggle airplane mode first if you want to see the
+   privacy promise hold.
+
+> **Why no downloadable APK yet (on purpose).** Until in-app import for the
+> whisper model lands, a prebuilt APK alone wouldn't get a non-developer to a
+> working transcription — both models still need side-loading, and whisper has
+> no in-app picker today. Once whisper import is in-app (the SAF follow-up to
+> [ADR 0008](docs/decisions/0008-litertlm-and-saf-import.md)), a downloadable
+> build becomes genuinely useful and will land in
+> [Releases](https://github.com/oierreaemme/notari/releases).
 
 ## Building
 
@@ -269,7 +308,8 @@ Module layout:
 :core:datastore     — DataStore preferences (settings)
 :core:inference     — LiteRT-LM runtime + Gemma 4 E2B engine lifecycle
                       (GPU/CPU probing, MTP, onTrimMemory release)
-:core:asr           — SpeechRecognizer continuous-listen wrapper
+:core:asr           — whisper.cpp batch transcriber (PCM in RAM,
+                      transcribe-at-stop) + Bluetooth mic routing
 :feature:capture    — recording + structuring + review screen
 :feature:notes      — list, search, filter, multi-select bulk actions
 :feature:noteDetail — single-note view, edit, share as Markdown+YAML
