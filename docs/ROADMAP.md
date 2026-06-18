@@ -143,6 +143,24 @@ Settings tile, Assistant/`ACTION_ASSIST` entry → straight into recording.
 
 ---
 
+## Candidates from a survey of comparable on-device Gemma 4 projects (2026-06-18)
+
+A scan of comparable on-device Gemma 4 apps and write-ups confirmed Notari is
+already aligned on the core patterns — deterministic extraction + LLM-for-prose
+(ADR 0015), a non-agentic single-pass pipeline, the plain-text fallback, and
+distill-forward note shaping. Most surveyed techniques are therefore validation,
+not new work. The few genuinely new candidates:
+
+| # | Item | Impact | Effort | Status |
+|---|------|--------|--------|--------|
+| **C1** | **MTP-on-CPU**: verify speculative decoding actually helps on the CPU backend. A comparable on-device write-up reports MTP is net-negative on CPU (drafter + target run sequentially), and our own `StructureNoteUseCaseImpl` already notes "MTP not engaging effectively". If confirmed, gate `enableSpeculativeDecoding` to GPU-only. | Med (CPU users) | S | **spike in progress** — `docs/prompt-evaluations/mtp-cpu-spike.md` |
+| **C2** | Native structured output (constrained decoding via the `OpenApiTool` / tool path available on LiteRT-LM 0.11.0) to harden JSON validity. | Med | M | [ADR 0031](decisions/0031-litertlm-native-function-calling.md) (Proposed; prototype-before-adopt — timeout, not parse failure, is the dominant fallback) |
+| **C3** | LoRA fine-tune of Gemma 4 E2B on the *shipped* structuring prompt (zero train/inference distribution shift; stronger determinism). | Med–High | L | Parked — gated on verifying LiteRT-LM LoRA support on our backend |
+| **C4** | Batch "summarise my week" over stored notes, run off the critical path (off-peak / on charger). | Low–Med | M | Parked — future feature |
+
+C1 is the only near-term action and overlaps R4 (latency). C2–C4 are recorded so
+they aren't re-discovered from scratch later.
+
 ## Sequencing recommendation
 
 1. **R1.5 → R1** and **R2.1** in parallel — both are high-impact and independent;

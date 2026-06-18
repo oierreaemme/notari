@@ -263,11 +263,23 @@ class LiteRtLmGemmaSession(
                 ),
             )
         return try {
+            val startedNanos = System.nanoTime()
             val response = conversation.sendMessage(prompt)
+            val elapsedMs = (System.nanoTime() - startedNanos) / 1_000_000
             val text =
                 response.contents.contents
                     .filterIsInstance<Content.Text>()
                     .joinToString("") { it.text }
+            // Perf breadcrumb for backend/MTP latency work (e.g. the MTP-on-CPU spike,
+            // docs/prompt-evaluations/mtp-cpu-spike.md). Length-only, no note content —
+            // privacy-safe and stripped from release by R8 (ADR 0021). `in`/`out` are
+            // char counts: total = prefill(in) + decode(out), so comparing runs at a
+            // similar `out` on the same backend isolates the decode-speed effect of MTP.
+            Log.d(
+                TAG,
+                "Gemma generate: ${elapsedMs}ms · backend=$loadedBackend · " +
+                    "in=${prompt.length}ch · out=${text.length}ch",
+            )
             // Logcat trace for the structuring pipeline. Strictly local — Logcat is on-device,
             // never leaves the phone. Lets `adb logcat -s VoiceNoteGemma` show what the model
             // is actually emitting when the parser falls back. The note body in the trace is
