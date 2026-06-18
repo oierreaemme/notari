@@ -32,6 +32,11 @@ template](https://github.com/joelparkerhenderson/architecture-decision-record/bl
 | 0024 | Proposed | [Make resolved datetime mentions actionable (reminders / calendar)](0024-actionable-datetime-mentions.md) |
 | 0025 | Parked | [Speaker diarization: considered, parked](0025-speaker-diarization-parked.md) |
 | 0026 | Parked | [Notari desktop companion for heavy processing: idea, parked](0026-notari-desktop-companion-parked.md) |
+| 0027 | Accepted | [Audio buffer ownership: atomic snapshot-swap and transcription-free discard](0027-audio-buffer-ownership-and-discard.md) |
+| 0028 | Accepted | [Process-lifecycle engine release, VM-owned keep-alive, recording duration cap](0028-process-lifecycle-engine-release-and-capture-hardening.md) |
+| 0029 | Accepted | [Capture-first UX surfaces: CPU advisory, editable review, quick entries, vault export](0029-capture-first-ux-surfaces.md) |
+| 0030 | Accepted | [GPU backend unlocked: the missing uses-native-library declaration](0030-gpu-unlock-uses-native-library.md) |
+| 0031 | Proposed | [LiteRT-LM native structured output for the structuring step](0031-litertlm-native-function-calling.md) |
 
 ## Adding a new ADR
 

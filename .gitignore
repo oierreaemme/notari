@@ -64,6 +64,11 @@ rehearsal*
 # Agent operating-contract / working notes — kept local, not published.
 GEMINI.md
 
+# Internal-only docs — competitive / strategy reasoning kept out of the public
+# repo. Public ADRs live in docs/decisions/; their fuller internal
+# counterparts live here and are never committed.
+docs/decisions/internal/
+
 # Secrets — there are no secrets in this project, but defense in depth
 .env
 .env.*
