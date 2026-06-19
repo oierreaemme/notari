@@ -286,3 +286,4 @@ internal class PlaintextToEncryptedMigrator(private val context: Context) {
                 0x6F, 0x72, 0x6D, 0x61, 0x74, 0x20, 0x33, 0x00,
             )
     }
+}
