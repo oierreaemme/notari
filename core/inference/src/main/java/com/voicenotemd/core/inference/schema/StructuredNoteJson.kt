@@ -13,15 +13,15 @@ import com.squareup.moshi.JsonClass
  */
 @JsonClass(generateAdapter = true)
 data class StructuredNoteJson(
-    @Json(name = "language") val language: String?,
-    @Json(name = "title") val title: String?,
-    @Json(name = "tags") val tags: List<String>?,
-    @Json(name = "mentions") val mentions: List<MentionJson>?,
-    @Json(name = "body_markdown") val bodyMarkdown: String?,
+    @param:Json(name = "language") val language: String?,
+    @param:Json(name = "title") val title: String?,
+    @param:Json(name = "tags") val tags: List<String>?,
+    @param:Json(name = "mentions") val mentions: List<MentionJson>?,
+    @param:Json(name = "body_markdown") val bodyMarkdown: String?,
 )
 
 @JsonClass(generateAdapter = true)
 data class MentionJson(
-    @Json(name = "surface_form") val surfaceForm: String?,
-    @Json(name = "iso_resolved") val isoResolved: String?,
+    @param:Json(name = "surface_form") val surfaceForm: String?,
+    @param:Json(name = "iso_resolved") val isoResolved: String?,
 )
