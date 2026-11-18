@@ -9,6 +9,11 @@
 
 > Speak. Get a clean Markdown note. The audio never leaves your phone.
 
+> **Status (November 2026): on hold.** Notari was built for the Gemma 4
+> Challenge and is not under active development right now. The code, the ADRs
+> and the [roadmap](docs/ROADMAP.md) stay here as a reference. Issues and
+> comments are welcome, but no new features are planned for the moment.
+
 ## Why this exists
 
 Voice notes are messy. Existing apps either give you a raw transcript that
