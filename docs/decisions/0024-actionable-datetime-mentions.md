@@ -46,6 +46,31 @@ Two privacy-clean mechanisms, shipped in order of cost:
 An optional **"Upcoming" agenda view** (notes with a future resolved mention,
 sorted by time) falls out naturally once mentions are actionable.
 
+## Implementation notes for mechanism 1 (added 2026-11-18)
+
+From review feedback on issue #3
+(https://github.com/oierreaemme/notari/issues/3#issuecomment-6720506721).
+These refine the calendar intent; they do not change the decision.
+
+1. **No `resolveActivity()` pre-check.** Under Android package visibility it can
+   return null even when the launch would succeed. Launch the intent directly
+   and catch `ActivityNotFoundException`, showing a short message when no
+   calendar app is installed. Add a `<queries>` entry only if the UI ever needs
+   to know availability upfront (e.g. to hide the action).
+2. **Explicit start, end and all-day policy.** Pass the start as
+   `CalendarContract.EXTRA_EVENT_BEGIN_TIME` in epoch millis and define the end
+   explicitly (a default duration the user can change in the calendar editor).
+   `DateMention` currently holds only `surfaceForm` and `resolved: Instant?`, so
+   it cannot tell "domani" (date only) from "domani alle 15". Mechanism 1 needs
+   that distinction carried through from resolution (e.g. a date-only flag) to
+   decide between a timed event and `EXTRA_EVENT_ALL_DAY`.
+3. **No state written back after the hand-off.** The calendar editor lets the
+   user cancel, edit or save, and Notari cannot know which. On return the
+   mention must not be marked as scheduled or consumed. This keeps mechanism 1
+   independent from the mention→alarm mapping of mechanism 2.
+4. **Test cases to cover:** device with no calendar app, user cancelling in the
+   calendar editor, note with multiple resolved mentions.
+
 ## Alternatives considered
 
 - **Do nothing / display only (status quo).** Wastes the app's best data.
